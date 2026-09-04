@@ -66,6 +66,18 @@ def _group_words(words: list[dict], max_chars: int, max_lines: int, max_duration
     return groups
 
 
+def font_scale(width: int, height: int) -> float:
+    """Font scale factor relative to the 1920x1080 reference frame (styles are authored at 1080p)."""
+    return (height if width >= height else width) / 1080.0
+
+
+def chars_per_line_for(width: int, height: int, base_chars: int) -> int:
+    """Line length budget for a frame: `base_chars` is defined for 16:9; narrower frames get
+    proportionally fewer characters so wrapped lines stay inside the safe area."""
+    ratio = (width / height) / (16 / 9)
+    return max(16, int(round(base_chars * min(1.0, ratio))))
+
+
 def wrap_lines(text: str, max_chars: int, max_lines: int) -> list[str]:
     words = text.split()
     lines: list[str] = []
@@ -185,15 +197,17 @@ def to_ass(cues: list[dict], style: dict[str, Any], width: int, height: int) -> 
     """Advanced SubStation Alpha with styling + optional animation (fade / pop / karaoke)."""
     st = {**DEFAULT_STYLE, **(style or {})}
     align = {"bottom": 2, "center": 5, "top": 8}[st.get("position", "bottom")]
-    # Scale font relative to 1080p so styling looks the same at any resolution
-    scale = height / 1080.0
+    # Scale font relative to a 1080p *landscape* frame so styling looks the same at any
+    # resolution. Portrait / square frames scale by width (the short side) - scaling by height
+    # would make 9:16 captions ~1.8x too big and overflow the frame.
+    scale = font_scale(width, height)
     font_size = int(round(float(st["font_size"]) * scale))
     margin_v = int(round(float(st["margin_v"]) * scale))
     outline = float(st.get("outline_width") or 0) * scale
     bg = st.get("background_color")
     border_style = 4 if bg else 1  # 4 = opaque box behind text (libass), 1 = outline+shadow
     back_colour = _ass_color(bg, 0x60) if bg else _ass_color("#000000", 0x80)
-    max_chars, max_lines = int(st["max_chars_per_line"]), int(st["max_lines"])
+    max_chars, max_lines = chars_per_line_for(width, height, int(st["max_chars_per_line"])), int(st["max_lines"])
     anim = st.get("animation", "none")
     highlight = _ass_color(st.get("highlight_color", "#FFD400"))
 

@@ -37,8 +37,15 @@ from typing import Any
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.services.caption_service import DEFAULT_STYLE, to_ass
-from app.utils.ffmpeg import FFmpegError, escape_filter_path, ffmpeg_path, media_duration, run_ffmpeg
+from app.services.caption_service import DEFAULT_STYLE, font_scale, to_ass
+from app.utils.ffmpeg import (
+    FFmpegCancelled,
+    FFmpegError,
+    escape_filter_path,
+    ffmpeg_path,
+    media_duration,
+    run_ffmpeg,
+)
 from app.utils.fonts import default_font_path, font_family_name
 from workers.rendering.text_cards import render_text_card
 
@@ -105,6 +112,7 @@ class Compositor:
         work_dir: Path,
         progress: Callable[[float, str], None] | None = None,
         check_cancelled: Callable[[], None] | None = None,
+        should_stop: Callable[[], bool] | None = None,
     ):
         self.doc = doc
         self.locator = locator
@@ -115,6 +123,10 @@ class Compositor:
         self.work.mkdir(parents=True, exist_ok=True)
         self.progress = progress or (lambda f, m: None)
         self.check_cancelled = check_cancelled or (lambda: None)
+        # Cheap, exception-free, thread-safe predicate polled by the ffmpeg wrapper (also from
+        # the per-clip worker threads) so a cancel request kills the running encoder within
+        # ~0.5s instead of after the current stage. Must not touch any DB session.
+        self.should_stop = should_stop or (lambda: False)
         self.tracks: dict[str, list[dict[str, Any]]] = {t: [] for t in ("video", "image", "voiceover", "music", "sfx", "text", "captions")}
         for t in doc.get("tracks", []):
             self.tracks.setdefault(t["kind"], []).append(t)
@@ -128,13 +140,18 @@ class Compositor:
             visual_clips = self._apply_range(visual_clips)
         self.progress(0.02, "Rendering video... preparing clips")
 
-        clip_files = self._render_clips(visual_clips)  # 2% -> 55%
-        self.check_cancelled()
-        video_path, offsets, total = self._join_clips(visual_clips, clip_files)  # 55% -> 75%
-        self.check_cancelled()
-        audio_path = self._mix_audio(total, offsets)  # 75% -> 85%
-        self.check_cancelled()
-        final = self._finalize(video_path, audio_path, total, offsets, output)  # 85% -> 100%
+        try:
+            clip_files = self._render_clips(visual_clips)  # 2% -> 55%
+            self.check_cancelled()
+            video_path, offsets, total = self._join_clips(visual_clips, clip_files)  # 55% -> 75%
+            self.check_cancelled()
+            audio_path = self._mix_audio(total, offsets)  # 75% -> 85%
+            self.check_cancelled()
+            final = self._finalize(video_path, audio_path, total, offsets, output)  # 85% -> 100%
+        except FFmpegCancelled:
+            # Re-raise as the job-level cancellation so run_job records CANCELLED (+ refund)
+            self.check_cancelled()
+            raise
         return {"path": str(final), "duration": round(total, 3), "width": self.o.width, "height": self.o.height, "fps": self.o.fps}
 
     # ------------------------------------------------------------------ helpers
@@ -180,8 +197,12 @@ class Compositor:
 
         def work(i: int, clip: dict) -> tuple[int, Path]:
             out = self.work / f"clip_{i:04d}.mp4"
-            if not out.exists():
-                self._render_single_clip(clip, out)
+            if out.exists():
+                return i, out  # finished clip from a previous attempt (atomic rename below => never partial)
+            tmp = out.with_name(f"{out.stem}.part.mp4")
+            tmp.unlink(missing_ok=True)
+            self._render_single_clip(clip, tmp)
+            tmp.replace(out)
             return i, out
 
         max_workers = max(1, min(self.o.max_parallel_clips, os.cpu_count() or 1))
@@ -224,7 +245,7 @@ class Compositor:
                 args = ["-stream_loop", str(loops), "-i", str(src), "-t", f"{duration:.3f}", "-vf", f"{scale},fps={fps}", *enc, "-an", str(out)]
             else:
                 args = ["-ss", f"{trim_start:.3f}", "-i", str(src), "-t", f"{duration:.3f}", "-vf", f"{scale},fps={fps}", *enc, "-an", str(out)]
-        run_ffmpeg(args, timeout=max(120, int(duration * 20)))
+        run_ffmpeg(args, timeout=max(120, int(duration * 20)), should_stop=self.should_stop)
 
     def _image_motion_filter(self, effect: str, intensity: float, duration: float, W: int, H: int, fps: int) -> str:
         frames = max(1, int(round(duration * fps)))
@@ -321,7 +342,7 @@ class Compositor:
                 offset = offset + durations[i]
             prev = label
         args += ["-filter_complex", ";".join(graph), "-map", "[vout]", *self._encoder_args(fast=True), "-an", str(out)]
-        run_ffmpeg(args, timeout=max(300, int(sum(durations) * 15)))
+        run_ffmpeg(args, timeout=max(300, int(sum(durations) * 15)), should_stop=self.should_stop)
 
     # -- stage 3: audio -------------------------------------------------------------
     def _mix_audio(self, total: float, offsets: list[float]) -> Path | None:
@@ -438,7 +459,7 @@ class Compositor:
         out = self.work / "audio_mix.m4a"
         args = [*inputs, "-filter_complex", ";".join(filters), "-map", "[aout]", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", str(out)]
         self.progress(0.76, "Rendering video... mixing audio")
-        run_ffmpeg(args, timeout=max(300, int(total * 6)))
+        run_ffmpeg(args, timeout=max(300, int(total * 6)), should_stop=self.should_stop)
         self.progress(0.85, "Rendering video... audio mixed")
         return out
 
@@ -475,7 +496,7 @@ class Compositor:
             wm_png = self.work / "watermark.png"
             from workers.rendering.text_cards import render_watermark
 
-            render_watermark(wm_png, self.o.watermark_text, max(24, H // 36))
+            render_watermark(wm_png, self.o.watermark_text, max(24, min(W, H) // 36))
             inputs += ["-i", str(wm_png)]
             wm_filter_inputs = 1
 
@@ -503,7 +524,7 @@ class Compositor:
         def on_prog(frac: float) -> None:
             self.progress(0.86 + 0.13 * frac, f"Rendering video... encoding {int(frac * 100)}%")
 
-        run_ffmpeg(args, timeout=max(600, int(total * 30)), on_progress=on_prog, total_duration=total)
+        run_ffmpeg(args, timeout=max(600, int(total * 30)), on_progress=on_prog, total_duration=total, should_stop=self.should_stop)
         self.progress(0.995, "Rendering video... finalising")
         return output
 
@@ -512,7 +533,7 @@ class Compositor:
         if not clips:
             return None
         W, H = self.o.width, self.o.height
-        scale = H / 1080.0
+        scale = font_scale(W, H)
         font = font_family_name()
         header = f"""[Script Info]
 ScriptType: v4.00+

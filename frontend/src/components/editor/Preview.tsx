@@ -58,7 +58,7 @@ export function Preview({ cues, muted, onToggleMute }: { cues: CaptionCue[]; mut
         <div className="relative max-h-full overflow-hidden rounded-md bg-black shadow-2xl" style={{ aspectRatio: `${aspect}`, width: "100%", maxWidth: `calc((100vh - 420px) * ${aspect})`, containerType: "inline-size" }}>
           {visual ? <VisualLayer key={visual.clip.id} clip={visual.clip} time={playhead - visual.clip.start} playing={playing} /> : <div className="absolute inset-0 grid place-items-center text-xs text-muted">{doc?.tracks.length ? "Gap — nothing on the video track here" : "Empty timeline"}</div>}
           {text?.clip.text?.content && <TextLayer clip={text.clip} />}
-          {cue && doc && <CaptionLayer text={cue.text} style={doc.captions} width={doc.width} />}
+          {cue && doc && <CaptionLayer text={cue.text} style={doc.captions} width={doc.width} height={doc.height} />}
           {doc?.watermark?.enabled && doc.watermark.text && (
             <span className={cn("absolute rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white", doc.watermark.position.includes("top") ? "top-2" : "bottom-2", doc.watermark.position.includes("left") ? "left-2" : "right-2")} style={{ opacity: doc.watermark.opacity }}>{doc.watermark.text}</span>
           )}
@@ -150,8 +150,11 @@ function TextLayer({ clip }: { clip: Clip }) {
   );
 }
 
-function CaptionLayer({ text, style, width }: { text: string; style: TimelineDocument["captions"]; width: number }) {
-  const scale = 100 / width; // px in the render → % of the preview width
+function CaptionLayer({ text, style, width, height }: { text: string; style: TimelineDocument["captions"]; width: number; height: number }) {
+  // Styles are authored for a 1080p landscape frame; the renderer scales fonts by the frame's
+  // short side (see caption_service.font_scale). Convert render px → % of the preview width.
+  const fontScale = (width >= height ? height : width) / 1080;
+  const scale = (100 / width) * fontScale;
   const fs = (style.font_size || 44) * scale;
   const outline = (style.outline_width ?? 2) * scale;
   return (

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import select
 import shutil
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -55,6 +57,25 @@ class FFmpegError(RuntimeError):
     pass
 
 
+class FFmpegCancelled(Exception):
+    """Raised when `should_stop()` asked us to abort a running ffmpeg process."""
+
+
+def _kill(proc: subprocess.Popen) -> None:
+    """Stop an encoder promptly: SIGTERM, short grace, then SIGKILL. Never raises."""
+    if proc.poll() is not None:
+        return
+    try:
+        proc.terminate()
+        proc.wait(timeout=1.0)
+    except Exception:
+        try:
+            proc.kill()
+            proc.wait(timeout=2.0)
+        except Exception:
+            pass
+
+
 def run_ffmpeg(
     args: list[str],
     *,
@@ -62,11 +83,19 @@ def run_ffmpeg(
     on_progress: Callable[[float], None] | None = None,
     total_duration: float | None = None,
     cwd: str | Path | None = None,
+    should_stop: Callable[[], bool] | None = None,
+    poll_interval: float = 0.5,
 ) -> None:
-    """Run ffmpeg, optionally reporting progress (0-1) parsed from `-progress pipe:1`."""
+    """Run ffmpeg, optionally reporting progress (0-1) parsed from `-progress pipe:1`.
+
+    `should_stop` is polled every `poll_interval` seconds (and on every progress line); when it
+    returns True the process is terminated and `FFmpegCancelled` is raised, so a user's cancel
+    request takes effect within a second even in the middle of a long encode.
+    """
     cmd = [ffmpeg_path(), "-hide_banner", "-loglevel", "error", "-y", "-nostdin"]
-    if on_progress:
-        cmd += ["-progress", "pipe:1", "-stats_period", "0.5"]
+    want_progress = bool(on_progress or should_stop)
+    if want_progress:
+        cmd += ["-progress", "pipe:1", "-stats_period", str(poll_interval)]
     cmd += args
     log.debug("ffmpeg", cmd=" ".join(cmd[:12]) + (" ..." if len(cmd) > 12 else ""))
     proc = subprocess.Popen(
@@ -76,23 +105,50 @@ def run_ffmpeg(
         text=True,
         cwd=str(cwd) if cwd else None,
     )
+    started = time.monotonic()
     stderr_chunks: list[str] = []
     try:
-        if on_progress and proc.stdout is not None:
-            for line in proc.stdout:
-                if line.startswith("out_time_ms=") or line.startswith("out_time_us="):
-                    try:
-                        micros = int(line.split("=", 1)[1].strip() or 0)
-                    except ValueError:
-                        continue
-                    if total_duration and total_duration > 0:
-                        on_progress(min(1.0, max(0.0, micros / 1_000_000 / total_duration)))
-        _, err = proc.communicate(timeout=timeout)
+        if want_progress and proc.stdout is not None:
+            # Non-blocking line reads (select) so `should_stop` is honoured even while ffmpeg is
+            # busy and not emitting progress (e.g. during input probing / slow filters).
+            fd = proc.stdout.fileno()
+            buf = ""
+            while True:
+                if should_stop and should_stop():
+                    _kill(proc)
+                    raise FFmpegCancelled("ffmpeg cancelled")
+                if timeout and time.monotonic() - started > timeout:
+                    raise subprocess.TimeoutExpired(cmd, timeout)
+                ready, _, _ = select.select([fd], [], [], poll_interval)
+                if not ready:
+                    if proc.poll() is not None:
+                        break
+                    continue
+                chunk = os.read(fd, 65536).decode("utf-8", "replace")
+                if not chunk:
+                    break  # EOF: encoder finished (or died)
+                buf += chunk
+                *lines, buf = buf.split("\n")
+                for line in lines:
+                    if on_progress and (line.startswith("out_time_ms=") or line.startswith("out_time_us=")):
+                        try:
+                            micros = int(line.split("=", 1)[1].strip() or 0)
+                        except ValueError:
+                            continue
+                        if total_duration and total_duration > 0:
+                            on_progress(min(1.0, max(0.0, micros / 1_000_000 / total_duration)))
+        remaining = None if timeout is None else max(1.0, timeout - (time.monotonic() - started))
+        _, err = proc.communicate(timeout=remaining)
         if err:
             stderr_chunks.append(err)
     except subprocess.TimeoutExpired as exc:
-        proc.kill()
+        _kill(proc)
         raise FFmpegError(f"ffmpeg timed out after {timeout}s") from exc
+    except BaseException:
+        # cancellation, SoftTimeLimitExceeded, KeyboardInterrupt... never leave an orphan encoder
+        if proc.poll() is None:
+            _kill(proc)
+        raise
     if proc.returncode != 0:
         raise FFmpegError("".join(stderr_chunks)[-4000:] or f"ffmpeg exited with {proc.returncode}")
 

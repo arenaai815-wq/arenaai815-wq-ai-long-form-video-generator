@@ -64,8 +64,9 @@ def render_placeholder(prompt: str, width: int, height: int, *, seed: int | None
 
     draw = ImageDraw.Draw(img, "RGBA")
     font_path = default_font_path()
-    title_size = max(24, height // 22)
-    small_size = max(16, height // 45)
+    short = min(width, height)
+    title_size = max(24, short // 22)
+    small_size = max(14, short // 60)
     try:
         title_font = ImageFont.truetype(font_path, title_size) if font_path else ImageFont.load_default()
         small_font = ImageFont.truetype(font_path, small_size) if font_path else ImageFont.load_default()
@@ -107,9 +108,9 @@ def render_placeholder(prompt: str, width: int, height: int, *, seed: int | None
         draw.text(((width - tw) / 2 + 2, y + 2), line, font=title_font, fill=(0, 0, 0, 140))
         draw.text(((width - tw) / 2, y), line, font=title_font, fill=(255, 255, 255, 235))
         y += line_h
-    tag = "MOCK PROVIDER • replace with IMAGE_PROVIDER=openai|stability|replicate"
+    tag = "MOCK PROVIDER • set IMAGE_PROVIDER" if width < height else "MOCK PROVIDER • replace with IMAGE_PROVIDER=openai|stability|replicate"
     tw = draw.textlength(tag, font=small_font)
-    draw.text((width - tw - width // 40, height // 40), tag, font=small_font, fill=(255, 255, 255, 120))
+    draw.text((max(8, width - tw - width // 40), height // 40), tag, font=small_font, fill=(255, 255, 255, 120))
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)

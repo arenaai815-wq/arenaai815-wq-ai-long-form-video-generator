@@ -15,6 +15,7 @@ Design notes
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -371,6 +372,15 @@ class JobContext:
     def check_cancelled(self) -> None:
         if self.job.cancel_requested or is_cancel_requested(str(self.job.id)):
             raise JobCancelled()
+
+    def cancel_predicate(self) -> Callable[[], bool]:
+        """Thread-safe `() -> bool` for long native steps (ffmpeg, provider polling).
+
+        Only consults the Redis flag - never the ORM instance - so it may be called from
+        worker threads without touching the SQLAlchemy session.
+        """
+        job_id = str(self.job.id)
+        return lambda: is_cancel_requested(job_id)
 
     def complete(self, result: dict[str, Any] | None = None, message: str = "Complete") -> None:
         j = self.job

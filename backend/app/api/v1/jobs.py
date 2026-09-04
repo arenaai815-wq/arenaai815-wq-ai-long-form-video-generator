@@ -20,7 +20,15 @@ from app.models.enums import TERMINAL_STATES, JobState
 from app.models.job import GenerationJob, RenderJob
 from app.models.project import Project
 from app.models.user import User, UserSession
-from app.realtime.events import JOB_CHANNEL, PROJECT_CHANNEL, USER_CHANNEL, last_event, subscribe
+from app.realtime.events import (
+    JOB_CHANNEL,
+    PROJECT_CHANNEL,
+    USER_CHANNEL,
+    clear_cancel,
+    last_event,
+    publish_event_async,
+    subscribe,
+)
 from app.schemas.common import Message, Page
 from app.schemas.job import JobPublic, RenderJobPublic
 from app.services.job_service import cancel_job, event_for, get_job
@@ -153,9 +161,11 @@ async def get_job_route(job_id: uuid.UUID, user: CurrentUser, db: DB) -> JobPubl
 async def job_events(job_id: uuid.UUID, request: Request, user: SSEUser, db: DB) -> StreamingResponse:
     job = await get_job(db, job_id, user.id)
     latest = await last_event(str(job.id))
+    # The DB row is authoritative for the *state*; the cached event only adds detail. Never
+    # replay a stale terminal event for a job that has since been retried / re-queued.
+    if job.state in TERMINAL_STATES or not latest or latest.get("state") in {s.value for s in TERMINAL_STATES}:
+        latest = None
     initial = [latest or event_for(job)]
-    if job.state in TERMINAL_STATES:
-        initial = [event_for(job)]
     return _sse_response(_stream([JOB_CHANNEL.format(job_id=job.id)], initial, request, stop_when_terminal=True))
 
 
@@ -188,6 +198,7 @@ async def retry(job_id: uuid.UUID, user: CurrentUser, db: DB) -> JobPublic | Ren
     job.message = "Re-queued"
     job.stage = "Queued"
     await db.commit()
+    clear_cancel(str(job.id))  # a stale cancel flag would abort the retried run immediately
     if isinstance(job, RenderJob):
         from workers.tasks.render import run_render_job
 
@@ -198,5 +209,6 @@ async def retry(job_id: uuid.UUID, user: CurrentUser, db: DB) -> JobPublic | Ren
         task = run_pipeline if job.job_type.value == "full_pipeline" else run_generation_job
         res = task.apply_async(args=[str(job.id)], queue="generation")
     job.celery_task_id = res.id
+    await publish_event_async(event_for(job))  # refresh the cached last-event + notify open streams
     await db.commit()
     return await _public(db, job)

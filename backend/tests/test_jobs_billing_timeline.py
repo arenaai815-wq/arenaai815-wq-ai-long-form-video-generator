@@ -122,3 +122,15 @@ def test_local_storage_signatures_expire_and_bind_to_key():
     assert verify_local_signature("users/u/projects/p/renders/final.mp4", exp, sig)
     assert not verify_local_signature("users/u/projects/p/renders/other.mp4", exp, sig)
     assert not verify_local_signature("users/u/projects/p/renders/final.mp4", exp - 120, sign_local_url("users/u/projects/p/renders/final.mp4", exp - 120))
+
+
+def test_caption_font_scale_uses_short_side_and_narrows_lines():
+    from app.services.caption_service import chars_per_line_for, font_scale
+
+    assert font_scale(1920, 1080) == pytest.approx(1.0)
+    assert font_scale(3840, 2160) == pytest.approx(2.0)
+    assert font_scale(1080, 1920) == pytest.approx(1.0)  # portrait scales by width, not height
+    assert font_scale(1080, 1080) == pytest.approx(1.0)
+    assert chars_per_line_for(1920, 1080, 42) == 42
+    assert chars_per_line_for(1080, 1920, 42) == 16  # clamped floor for 9:16
+    assert chars_per_line_for(1080, 1080, 42) == 24

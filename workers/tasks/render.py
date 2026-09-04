@@ -125,7 +125,7 @@ def run_render_job(self, job_id: str) -> dict[str, Any]:
                 last_parent_tick[0] = frac
                 parent_ctx.progress(parent_base + (99 - parent_base) * frac, f"Rendering video... {int(frac * 100)}%")
 
-        comp = Compositor(doc, locator=_locator(ctx.db, work), options=options, captions=cues, caption_style=cap_style, work_dir=work, progress=progress, check_cancelled=ctx.check_cancelled)
+        comp = Compositor(doc, locator=_locator(ctx.db, work), options=options, captions=cues, caption_style=cap_style, work_dir=work, progress=progress, check_cancelled=ctx.check_cancelled, should_stop=ctx.cancel_predicate())
         output = work / ("preview.mp4" if job.is_preview else "final.mp4")
         result = comp.render(output)
 

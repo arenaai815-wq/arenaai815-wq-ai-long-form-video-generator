@@ -110,8 +110,10 @@ def test_password_hashing_and_tokens():
     tok = create_access_token(uid, sid)
     payload = decode_token(tok, "access")
     assert payload["sub"] == str(uid) and payload["sid"] == str(sid)
-    with pytest.raises(Exception):
-        decode_token(tok, "refresh")  # wrong type is rejected
+    with pytest.raises(ValueError, match="wrong token type"):
+        decode_token(tok, "refresh")  # an access token cannot be used as a refresh token
+    with pytest.raises(ValueError, match="invalid token"):
+        decode_token(tok[:-4] + "abcd", "access")  # tampered signature
     key, prefix, digest = generate_api_key()
     assert key.startswith(prefix) and digest == hash_api_key(key) and len(digest) == 64
 

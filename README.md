@@ -180,13 +180,13 @@ Two job tables (`generation_jobs`, `render_jobs`) share one lifecycle implemente
 
 * **States:** `QUEUED → PROCESSING → GENERATING_SCRIPT | GENERATING_AUDIO | GENERATING_VISUALS | RENDERING | UPLOADING → COMPLETED | FAILED | CANCELLED` (see `shared/schemas/job_states.json`).
 * **Progress + ETA:** stage-weighted percent, message ("Generating voiceover... 7/10 scenes"), ETA from measured stage throughput. Published on every update.
-* **Retries:** transient errors → Celery retry with backoff up to `max_attempts` (`attempt` tracked in DB); non-retryable provider/validation errors fail fast. `POST /jobs/{id}/retry` re-queues a failed job.
+* **Retries:** transient errors → Celery retry with backoff up to `max_attempts` (`attempt` tracked in DB); non-retryable errors (validation, provider refusal, missing media, no credits) fail fast with a human-readable `error`. `POST /jobs/{id}/retry` re-queues a failed or cancelled job: pipeline retries resume from the last completed stage, render retries reuse already-encoded scene clips.
 * **Timeouts:** soft/hard Celery time limits per queue (`JOB_DEFAULT_TIMEOUT_SECONDS`, `RENDER_JOB_TIMEOUT_SECONDS`); soft limit produces a clean `FAILED` with error.
-* **Cancellation:** `POST /jobs/{id}/cancel` sets a Redis flag; workers check it between steps (and FFmpeg is killed) → `CANCELLED`, credits refunded.
+* **Cancellation:** `POST /jobs/{id}/cancel` sets a Redis flag; workers poll it between steps *and* inside long native steps — a running FFmpeg encode is terminated within ~1 s → `CANCELLED`. Render credits are only charged on completion, so a cancelled render costs nothing.
 * **Idempotency:** `idempotency_key` on generation/render requests returns the existing job instead of creating a duplicate; task delivery is idempotent (terminal jobs are skipped).
 * **Hand-off:** the pipeline job delegates to a render job and stays `RENDERING`; the render worker mirrors progress to the parent and completes/fails it.
 * **Health:** workers heartbeat into Redis every 20 s (`GET /health/workers`), queue depths and 24 h stats at `GET /health/queues`; beat reaps stale jobs whose worker died and cleans temp dirs.
-* **Logs:** structured per-job log lines (`GET /jobs/{id}/logs`) plus `error` / `error_details` for failures.
+* **Logs:** every job keeps a persisted, structured trail (`GET /jobs/{id}/logs`): worker pickup, stage transitions and milestones, the provider/model each stage used, per-stage summaries (words, scenes, audio seconds, assets, encode size/time) and the final completion / failure / cancellation entry, plus `error` / `error_details` (type + traceback) for failures. Visible in the UI from the Jobs page and the Export page.
 
 ---
 
@@ -217,7 +217,10 @@ Common concerns live in `providers/http.py`: timeouts, retries with backoff, rat
 * **captions** burned in via ASS (`subtitles` filter) with configurable font/size/colour/position/animation; or exported as SRT/VTT sidecars
 * **text overlays / on-screen text**, **intro & outro** cards, **watermark** (text or image, position/opacity; forced on free plan)
 * output: H.264 (`libx264`, CRF/preset configurable) + AAC, `+faststart` MP4; 16:9 / 9:16 / 1:1, 720p → 4K; previews render at ≤720p, ranges supported
-* progress parsed from FFmpeg `-progress` and streamed to the job; cooperative cancellation kills the process
+* scene clips are encoded in parallel (`RENDER_MAX_PARALLEL_CLIPS`) into a per-job work dir with atomic `.part` → `.mp4` writes, then joined with transitions, mixed and finalised; a retry after a crash/cancel skips clips that already finished
+* before encoding, every asset referenced by the timeline is resolved (downloaded from object storage on demand); a missing object fails the job immediately with the offending scene/clip named
+* progress parsed from FFmpeg `-progress` and streamed to the job; cooperative cancellation terminates the encoder within ~1 s (never leaves orphaned `ffmpeg` processes)
+* captions, text overlays and the watermark scale by the frame's short side so 9:16 / 1:1 output gets the same visual size as 16:9
 
 ---
 

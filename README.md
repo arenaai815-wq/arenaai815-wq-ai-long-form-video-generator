@@ -306,6 +306,17 @@ make build           # production build of the frontend
 * Rendering locally without a system FFmpeg works through the `imageio-ffmpeg` binary (no `drawtext`; captions use libass/ASS and text cards are rasterised with Pillow, so nothing depends on `drawtext`).
 * Generated data lives in `data/` (git-ignored). Frontend dev server proxies `/api` to `API_INTERNAL_URL`.
 
+
+### Continuous integration
+
+A ready-to-use GitHub Actions workflow lives at [`infrastructure/ci/github-actions-ci.yml`](infrastructure/ci/github-actions-ci.yml) (ruff + pytest, tsc + eslint + `next build`, and a live end-to-end job that boots Postgres/Redis, the API and a worker, then runs signup → full pipeline → MP4 with mock providers and real FFmpeg). Enable it with:
+
+```bash
+mkdir -p .github/workflows && cp infrastructure/ci/github-actions-ci.yml .github/workflows/ci.yml
+```
+
+(It is kept outside `.github/` because automated pushes from apps without the `workflows` permission are rejected by GitHub.)
+
 ---
 
 ## Production deployment

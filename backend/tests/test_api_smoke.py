@@ -50,7 +50,10 @@ def test_full_pipeline_produces_mp4(client: httpx.Client):
             elif line.startswith("event: done"):
                 break
     assert states[-1] == "COMPLETED", states
-    assert "RENDERING" in states and "GENERATING_AUDIO" in states
+    # Mock stages can finish between two SSE samples, so only the slow ones are guaranteed to be observed.
+    assert "RENDERING" in states, states
+    logs = client.get(f"/jobs/{job['id']}/logs").json()["logs"]
+    assert any("Generating voiceover" in entry["message"] for entry in logs), "voiceover stage should be in the job log"
 
     export = client.get(f"/projects/{pid}/export")
     assert export.status_code == 200, export.text

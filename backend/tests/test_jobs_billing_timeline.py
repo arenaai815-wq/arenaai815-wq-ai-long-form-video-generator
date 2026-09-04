@@ -136,3 +136,15 @@ def test_caption_font_scale_uses_short_side_and_narrows_lines():
     assert chars_per_line_for(1920, 1080, 42) == 42
     assert chars_per_line_for(1080, 1920, 42) == 16  # clamped floor for 9:16
     assert chars_per_line_for(1080, 1080, 42) == 24
+
+
+def test_db_dependency_commits_before_the_response_is_sent():
+    """Regression: FastAPI >= 0.118 runs yield-dependency teardown *after* the response by default,
+    so a login/signup response could reach the client before its session row was committed and the
+    immediately-following /auth/me failed with 401. The DB dependency must be function-scoped."""
+    import typing
+
+    from app.api.deps import DB
+
+    dep = next(m for m in typing.get_args(DB)[1:] if hasattr(m, "dependency"))
+    assert dep.scope == "function"

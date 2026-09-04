@@ -31,7 +31,11 @@ def _rate_key(request: Request) -> str:
 
 limiter = Limiter(key_func=_rate_key, default_limits=[settings.rate_limit_default], storage_uri=settings.redis_url, headers_enabled=False)
 
-DB = Annotated[AsyncSession, Depends(get_db)]
+# scope="function": the session's exit code (COMMIT) must run *before* the response is sent.
+# FastAPI >= 0.106 defaults yield-dependencies to request scope, i.e. teardown after the response,
+# which let a client receive a login/signup response before its new session row was committed
+# and get a 401 on the immediately following /auth/me.
+DB = Annotated[AsyncSession, Depends(get_db, scope="function")]
 
 
 async def get_current_user(

@@ -1,0 +1,57 @@
+# Production overrides. Use together with the base file:
+#   docker compose -f infrastructure/docker-compose.yml -f infrastructure/docker-compose.prod.yml up -d
+#
+# Assumes: managed PostgreSQL + Redis + S3 bucket configured in .env (DATABASE_URL, REDIS_URL,
+# S3_*), TLS terminated by a reverse proxy (Caddy/Traefik/nginx/ALB) in front of `frontend`.
+# The API is not published on the host; the frontend proxies /api/* to it on the internal network.
+services:
+  postgres:
+    profiles: ["local-infra"]
+  redis:
+    profiles: ["local-infra"]
+  minio:
+    profiles: ["local-infra"]
+  minio-init:
+    profiles: ["local-infra"]
+
+  migrate:
+    environment:
+      ENVIRONMENT: production
+    depends_on: []
+
+  api:
+    ports: []
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "5" }
+
+  worker-generation:
+    environment:
+      ENVIRONMENT: production
+    deploy:
+      replicas: ${GENERATION_REPLICAS:-2}
+
+  worker-render:
+    environment:
+      ENVIRONMENT: production
+    deploy:
+      replicas: ${RENDER_REPLICAS:-2}
+      resources:
+        limits:
+          cpus: "${RENDER_CPUS:-8}"
+          memory: ${RENDER_MEMORY:-8g}
+
+  beat:
+    environment:
+      ENVIRONMENT: production
+
+  frontend:
+    ports:
+      - "127.0.0.1:3000:3000"

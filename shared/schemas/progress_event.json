@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "JobProgressEvent",
+  "description": "Payload published on the Redis channel `jobs:{job_id}` and `projects:{project_id}` and streamed to the browser over SSE.",
+  "type": "object",
+  "required": ["job_id", "project_id", "state", "progress", "message", "ts"],
+  "properties": {
+    "job_id": { "type": "string", "format": "uuid" },
+    "project_id": { "type": "string", "format": "uuid" },
+    "job_type": { "type": "string" },
+    "state": { "$ref": "job_states.json" },
+    "stage": { "type": "string", "description": "Human readable stage label, e.g. 'Generating voiceover'" },
+    "progress": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "message": { "type": "string", "example": "Generating voiceover... 45%" },
+    "eta_seconds": { "type": ["integer", "null"] },
+    "result": { "type": ["object", "null"] },
+    "error": { "type": ["string", "null"] },
+    "ts": { "type": "string", "format": "date-time" }
+  }
+}

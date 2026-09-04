@@ -78,7 +78,40 @@ celery_app.conf.update(
 
 
 def worker_identity() -> str:
+    """Celery node name (e.g. `render@host`) - set for child processes by `_after_setup`.
+
+    Jobs store this in `worker_id`, and the stale-job reaper checks the matching Redis
+    heartbeat key, so it must equal the name used by `workers.heartbeat`.
+    """
     return os.environ.get("WORKER_ID") or f"{socket.gethostname()}-{os.getpid()}"
+
+
+@signals.celeryd_after_setup.connect
+def _after_setup(sender: str, instance, **_: object) -> None:  # noqa: ANN001
+    # Runs in the main process before the pool forks: children inherit WORKER_ID.
+    os.environ["WORKER_ID"] = sender
+
+
+@signals.worker_ready.connect
+def _on_ready(sender, **_: object) -> None:  # noqa: ANN001
+    from celery import __version__ as celery_version
+
+    from workers import heartbeat
+
+    consumer = sender  # celery.worker.consumer.Consumer
+    try:
+        queues = sorted(q.name for q in consumer.task_consumer.queues)
+    except Exception:
+        queues = []
+    concurrency = int(getattr(consumer.controller, "concurrency", 0) or getattr(consumer.pool, "num_processes", 1) or 1)
+    heartbeat.start(worker_identity(), queues, concurrency, version=celery_version)
+
+
+@signals.worker_shutdown.connect
+def _on_shutdown(**_: object) -> None:
+    from workers import heartbeat
+
+    heartbeat.stop()
 
 
 @signals.worker_process_init.connect

@@ -14,7 +14,7 @@ from app.models.media import Voiceover
 from app.models.scene import Scene
 from app.providers import get_registry
 from app.schemas.job import JobPublic
-from app.schemas.voiceover import VoicePreviewRequest, VoiceoverGenerateRequest, VoiceoverPublic, VoicePublic
+from app.schemas.voiceover import VoiceoverGenerateRequest, VoiceoverPublic, VoicePreviewRequest, VoicePublic
 from app.services.billing_service import assert_can_afford, credits_for_usage
 from app.services.job_service import create_generation_job
 from app.services.media_service import url_for

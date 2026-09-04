@@ -73,8 +73,9 @@ def make_thumbnail(data: bytes, content_type: str, *, size: int = 480) -> bytes 
     """Generate a JPEG thumbnail for images and videos (first frame)."""
     try:
         if content_type.startswith("image/"):
-            from PIL import Image
             import io
+
+            from PIL import Image
 
             im = Image.open(io.BytesIO(data)).convert("RGB")
             im.thumbnail((size, size))
@@ -98,8 +99,9 @@ def probe_media(data: bytes, content_type: str) -> dict:
     info: dict = {}
     try:
         if content_type.startswith("image/"):
-            from PIL import Image
             import io
+
+            from PIL import Image
 
             im = Image.open(io.BytesIO(data))
             info["width"], info["height"] = im.size

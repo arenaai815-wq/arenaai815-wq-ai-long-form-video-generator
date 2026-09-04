@@ -24,7 +24,14 @@ from app.core.logging import get_logger
 from app.models.billing import PLAN_CATALOG, Subscription
 from app.models.enums import CreditTransactionKind, PlanTier, SubscriptionStatus
 from app.models.user import User
-from app.schemas.billing import ChangePlanRequest, CheckoutRequest, CheckoutResponse, CreditPurchaseRequest, PlanPublic, SubscriptionPublic
+from app.schemas.billing import (
+    ChangePlanRequest,
+    CheckoutRequest,
+    CheckoutResponse,
+    CreditPurchaseRequest,
+    PlanPublic,
+    SubscriptionPublic,
+)
 from app.schemas.common import Message
 from app.services.billing_service import add_credits, apply_plan, ensure_subscription
 

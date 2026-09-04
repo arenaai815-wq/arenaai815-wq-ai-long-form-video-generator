@@ -24,7 +24,7 @@ from app.services import (
 )
 from app.services.job_service import JobContext, overall_progress
 from workers.celery_app import celery_app
-from workers.tasks.base import run_job, Handoff
+from workers.tasks.base import Handoff, run_job
 
 log = get_logger(__name__)
 

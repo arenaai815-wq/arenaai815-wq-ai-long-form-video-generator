@@ -102,13 +102,24 @@ async def last_event(job_id: str) -> dict[str, Any] | None:
     return json.loads(raw) if raw else None
 
 
-async def subscribe(channels: list[str]) -> AsyncIterator[dict[str, Any]]:
-    """Async generator yielding parsed events from one or more channels."""
+async def subscribe(channels: list[str], *, heartbeat: float | None = None) -> AsyncIterator[dict[str, Any] | None]:
+    """Async generator yielding parsed events from one or more channels.
+
+    When `heartbeat` is set, `None` is yielded whenever no message arrived within that many
+    seconds so callers can emit keep-alives *without* cancelling this generator (cancelling
+    a pending `__anext__()` with `asyncio.wait_for` would finalize the generator and silently
+    end the stream - a classic SSE bug).
+    """
     r = async_redis()
     pubsub = r.pubsub()
     await pubsub.subscribe(*channels)
     try:
-        async for msg in pubsub.listen():
+        while True:
+            msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=heartbeat if heartbeat else 1.0)
+            if msg is None:
+                if heartbeat:
+                    yield None
+                continue
             if msg.get("type") != "message":
                 continue
             try:

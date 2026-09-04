@@ -8,7 +8,7 @@ from __future__ import annotations
 import enum
 
 
-class StrEnum(str, enum.Enum):
+class StrEnum(str, enum.Enum):  # noqa: UP042 - keep str mixin for SQLAlchemy Enum + JSON serialisation on 3.11
     def __str__(self) -> str:  # pragma: no cover
         return str(self.value)
 

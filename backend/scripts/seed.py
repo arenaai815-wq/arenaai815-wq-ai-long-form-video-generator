@@ -30,7 +30,13 @@ from app.core.logging import configure_logging, get_logger  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.db.session import sync_session  # noqa: E402
 from app.models.billing import Subscription  # noqa: E402
-from app.models.enums import AudioKind, CreditTransactionKind, MediaSource, PlanTier, ProviderKind  # noqa: E402
+from app.models.enums import (  # noqa: E402
+    AudioKind,
+    CreditTransactionKind,
+    MediaSource,
+    PlanTier,
+    ProviderKind,
+)
 from app.models.media import AudioAsset  # noqa: E402
 from app.models.provider import AIProvider  # noqa: E402
 from app.models.user import User  # noqa: E402
@@ -82,7 +88,7 @@ def _synth_music(bpm: int, progression: list[list[int]], root: float, brightness
         env = min(1.0, t / 2.0, (seconds - t) / 4.0)
         out[i] = (pad + arp + kick) * env
     peak = max(1e-6, max(abs(x) for x in out))
-    pcm = struct.pack("<%dh" % n, *(int(max(-1.0, min(1.0, x / peak * 0.85)) * 32767) for x in out))
+    pcm = struct.pack(f"<{n}h", *(int(max(-1.0, min(1.0, x / peak * 0.85)) * 32767) for x in out))
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
         w.setnchannels(1)

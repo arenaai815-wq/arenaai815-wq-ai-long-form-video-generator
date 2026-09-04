@@ -6,7 +6,14 @@ import time
 from typing import Any
 
 from app.core.config import settings
-from app.providers.base import ImageProvider, ImageResult, ProviderPermanentError, ProviderTransientError, UsageMetrics, provider_retry
+from app.providers.base import (
+    ImageProvider,
+    ImageResult,
+    ProviderPermanentError,
+    ProviderTransientError,
+    UsageMetrics,
+    provider_retry,
+)
 from app.providers.http import request_bytes, request_json
 
 REPLICATE_API = "https://api.replicate.com/v1"

@@ -8,7 +8,6 @@ preserves user edits on tracks that are not scene-derived (music, sfx, text over
 from __future__ import annotations
 
 import copy
-
 import hashlib
 import json
 import uuid

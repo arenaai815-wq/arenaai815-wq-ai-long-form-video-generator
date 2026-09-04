@@ -7,7 +7,13 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.providers.base import ImageProvider, ImageResult, ProviderTransientError, UsageMetrics, provider_retry
+from app.providers.base import (
+    ImageProvider,
+    ImageResult,
+    ProviderTransientError,
+    UsageMetrics,
+    provider_retry,
+)
 from app.providers.http import client, raise_for_provider
 
 _ASPECTS = ["16:9", "1:1", "21:9", "2:3", "3:2", "4:5", "5:4", "9:16", "9:21"]

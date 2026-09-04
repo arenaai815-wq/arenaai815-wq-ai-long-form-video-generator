@@ -306,8 +306,25 @@ class MockLLMProvider(LLMProvider):
         transitions = ["fade", "dissolve", "slideleft", "wipeleft", "fadeblack", "smoothleft"]
         effects = ["ken_burns", "zoom_in", "zoom_out", "pan_left", "pan_right"]
         scenes = []
+        topic_subject = _subject(topic)
+        stop = {"the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "this", "that", "these", "those", "is", "are", "was", "were", "it", "its", "as", "at", "by", "from", "but", "so", "where", "does", "leave", "us", "here", "there", "you", "your", "we", "our", "they", "their", "not", "just", "than", "then", "into", "about", "over", "how", "why", "what", "when", "which", "who", "picture", "imagine", "yet", "still", "very", "more", "most", "one", "number", "should", "stop", "tracks", "kind", "part", "come"}
         for i, chunk in enumerate(chunks):
-            subject = re.sub(r"[^A-Za-z ]", "", chunk).strip().split(".")[0][:80] or topic
+            # Build a short noun-phrase subject from the narration's content words so image
+            # prompts / on-screen text read like "Sahara desert savanna rainfall", not a cut-off sentence.
+            topic_words = {w.lower() for w in re.findall(r"[A-Za-z]{4,}", topic)}
+            tokens = re.findall(r"[A-Za-z][A-Za-z-]{2,}", chunk)
+            scored: list[tuple[int, int, str]] = []
+            seen: set[str] = set()
+            for idx, w in enumerate(tokens):
+                lw = w.lower()
+                if lw in stop or lw in seen:
+                    continue
+                seen.add(lw)
+                score = (2 if idx > 0 and w[0].isupper() else 0) + (2 if lw in topic_words else 0) + (1 if len(w) >= 6 else 0)
+                scored.append((score, idx, w))
+            best = sorted(sorted(scored, key=lambda t: -t[0])[:4], key=lambda t: t[1])
+            subject = " ".join(w for _, _, w in best) if len(best) >= 2 else topic_subject
+            subject = subject[:1].upper() + subject[1:]
             shot = rng.choice(shots)
             mood = rng.choice(moods)
             scenes.append(
@@ -315,11 +332,11 @@ class MockLLMProvider(LLMProvider):
                     "title": f"{heading or 'Scene'} — part {i + 1}" if heading else f"Scene {i + 1}",
                     "narration": chunk,
                     "visual_description": f"A {shot} illustrating '{subject}'. {style.capitalize()} lighting, {mood} mood, high detail, cohesive colour grade.",
-                    "suggested_footage": f"Stock: {shot} related to {topic}; alternatives: archival stills, infographic overlay.",
-                    "image_prompt": f"{style} {shot} of {subject}, related to {topic}, {mood} atmosphere, dramatic natural lighting, ultra detailed, 8k, photorealistic, 16:9",
-                    "video_prompt": f"{shot}, {subject}, {topic}, {style}, {mood}, smooth camera motion, cinematic, 4k",
+                    "suggested_footage": f"Stock: {shot} of {subject.lower()} ({topic_subject}); alternatives: archival stills, infographic overlay.",
+                    "image_prompt": f"{style} {shot} of {subject}, {topic_subject}, {mood} atmosphere, dramatic natural lighting, ultra detailed, 8k, photorealistic, 16:9",
+                    "video_prompt": f"{shot}, {subject}, {topic_subject}, {style}, {mood}, smooth camera motion, cinematic, 4k",
                     "negative_prompt": "text, watermark, logo, blurry, low quality, distorted hands, extra limbs",
-                    "on_screen_text": subject[:48] if i % 3 == 0 else "",
+                    "on_screen_text": (heading if i == 0 and heading else subject[:48]) if i % 3 == 0 else "",
                     "keywords": [w.lower() for w in re.findall(r"[A-Za-z]{5,}", subject)][:5],
                     "transition": rng.choice(transitions),
                     "motion_effect": rng.choice(effects),

@@ -6,7 +6,13 @@ import base64
 from typing import Any
 
 from app.core.config import settings
-from app.providers.base import ProviderPermanentError, UsageMetrics, VideoProvider, VideoResult, provider_retry
+from app.providers.base import (
+    ProviderPermanentError,
+    UsageMetrics,
+    VideoProvider,
+    VideoResult,
+    provider_retry,
+)
 from app.providers.http import request_bytes
 from app.providers.image.replicate_image import replicate_run
 

@@ -171,7 +171,7 @@ class StockMediaItem:
 # --------------------------------------------------------------------------
 
 
-class BaseProvider(abc.ABC):
+class BaseProvider(abc.ABC):  # noqa: B024 - concrete methods shared by all providers; subclasses add abstract ones
     kind: str = "base"
     name: str = "base"
     display_name: str = "Base"

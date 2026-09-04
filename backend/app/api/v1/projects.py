@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from app.api.deps import DB, CurrentUser, OwnedProject, limiter
 from app.core.config import settings
 from app.core.exceptions import ValidationError
-from app.models.enums import JobType, ProjectStatus, TERMINAL_STATES
+from app.models.enums import TERMINAL_STATES, JobType, ProjectStatus
 from app.models.job import GenerationJob, RenderJob
 from app.models.media import Caption, MediaAsset, Voiceover
 from app.models.project import Project
@@ -18,7 +18,14 @@ from app.models.script import Script
 from app.schemas.billing import CostEstimate
 from app.schemas.common import Message, Page
 from app.schemas.job import JobPublic, PipelineRequest
-from app.schemas.project import ProjectCreate, ProjectDetail, ProjectSettings, ProjectStats, ProjectSummary, ProjectUpdate
+from app.schemas.project import (
+    ProjectCreate,
+    ProjectDetail,
+    ProjectSettings,
+    ProjectStats,
+    ProjectSummary,
+    ProjectUpdate,
+)
 from app.services.billing_service import assert_can_afford, estimate_pipeline_cost
 from app.services.job_service import active_job_for_project, create_generation_job
 from app.services.media_service import url_for
@@ -149,8 +156,8 @@ async def update_project(body: ProjectUpdate, project: OwnedProject, db: DB) -> 
         setattr(project, k, v)
     if "aspect_ratio" in data or "resolution" in data:
         from app.db.session import get_sync_engine  # noqa: F401  (keeps import surface obvious)
-        from app.models.timeline import Timeline
         from app.models.enums import dimensions_for
+        from app.models.timeline import Timeline
 
         tl = (await db.execute(select(Timeline).where(Timeline.project_id == project.id))).scalar_one_or_none()
         if tl:

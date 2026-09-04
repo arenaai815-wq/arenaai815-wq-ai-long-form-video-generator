@@ -21,9 +21,9 @@ from app.realtime.events import publish_event, sync_redis
 from app.services.billing_service import add_credits_sync
 from app.services.job_service import event_for
 from workers.celery_app import celery_app
+from workers.heartbeat import HEARTBEAT_KEY
 
 log = get_logger(__name__)
-HEARTBEAT_KEY = "workers:heartbeat:{worker_id}"
 
 
 @celery_app.task(name="workers.tasks.maintenance.heartbeat")

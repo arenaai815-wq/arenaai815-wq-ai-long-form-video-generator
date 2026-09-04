@@ -6,7 +6,13 @@ import base64
 from typing import Any
 
 from app.core.config import settings
-from app.providers.base import ImageProvider, ImageResult, ProviderPermanentError, UsageMetrics, provider_retry
+from app.providers.base import (
+    ImageProvider,
+    ImageResult,
+    ProviderPermanentError,
+    UsageMetrics,
+    provider_retry,
+)
 from app.providers.http import request_bytes, request_json
 
 _SIZES = {"16:9": "1536x1024", "9:16": "1024x1536", "1:1": "1024x1024"}

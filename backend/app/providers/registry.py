@@ -19,8 +19,8 @@ from app.providers.base import (
     ImageProvider,
     LLMProvider,
     ProviderInfo,
-    STTProvider,
     StockMediaProvider,
+    STTProvider,
     TTSProvider,
     VideoProvider,
 )

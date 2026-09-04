@@ -7,7 +7,14 @@ import time
 from typing import Any
 
 from app.core.config import settings
-from app.providers.base import ProviderPermanentError, ProviderTransientError, UsageMetrics, VideoProvider, VideoResult, provider_retry
+from app.providers.base import (
+    ProviderPermanentError,
+    ProviderTransientError,
+    UsageMetrics,
+    VideoProvider,
+    VideoResult,
+    provider_retry,
+)
 from app.providers.http import request_bytes, request_json
 
 API = "https://api.dev.runwayml.com/v1"

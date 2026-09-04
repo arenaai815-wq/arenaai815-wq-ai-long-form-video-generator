@@ -7,7 +7,15 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.providers.base import ProviderTransientError, STTProvider, STTResult, TranscriptSegment, UsageMetrics, WordTiming, provider_retry
+from app.providers.base import (
+    ProviderTransientError,
+    STTProvider,
+    STTResult,
+    TranscriptSegment,
+    UsageMetrics,
+    WordTiming,
+    provider_retry,
+)
 from app.providers.http import client, raise_for_provider
 
 

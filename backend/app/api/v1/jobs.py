@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
@@ -81,18 +80,14 @@ async def _stream(channels: list[str], initial: list[dict[str, Any]], request: R
         if stop_when_terminal and ev.get("state") in {s.value for s in TERMINAL_STATES}:
             yield _sse(ev, "done")
             return
-    gen = subscribe(channels)
+    gen = subscribe(channels, heartbeat=SSE_HEARTBEAT_SECONDS)
     try:
-        while True:
+        async for ev in gen:
             if await request.is_disconnected():
                 break
-            try:
-                ev = await asyncio.wait_for(gen.__anext__(), timeout=SSE_HEARTBEAT_SECONDS)
-            except asyncio.TimeoutError:
+            if ev is None:  # idle heartbeat keeps proxies / browsers from closing the stream
                 yield ": ping\n\n"
                 continue
-            except StopAsyncIteration:
-                break
             yield _sse(ev)
             if stop_when_terminal and ev.get("state") in {s.value for s in TERMINAL_STATES}:
                 yield _sse(ev, "done")

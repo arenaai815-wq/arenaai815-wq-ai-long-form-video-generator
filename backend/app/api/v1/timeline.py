@@ -13,7 +13,12 @@ from app.models.scene import Scene
 from app.models.timeline import Timeline
 from app.schemas.timeline import TimelineDocument, TimelineOpsRequest, TimelinePublic, TimelineSaveRequest
 from app.services.media_service import url_for
-from app.services.timeline_service import apply_operation, get_or_create_timeline, save_document, sync_from_scenes
+from app.services.timeline_service import (
+    apply_operation,
+    get_or_create_timeline,
+    save_document,
+    sync_from_scenes,
+)
 
 router = APIRouter()
 

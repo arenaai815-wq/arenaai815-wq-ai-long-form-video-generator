@@ -1,0 +1,48 @@
+# --- secrets / local config ---------------------------------------------------
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env.local
+
+# --- generated data (media, renders, embedded dev databases) ------------------
+data/
+backend/data/
+*.mp4
+*.mov
+*.wav
+*.mp3
+!frontend/public/**/*.mp4
+
+# --- python -------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# --- node / next.js -----------------------------------------------------------
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+
+# --- editors / os -------------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# --- infrastructure -----------------------------------------------------------
+infrastructure/**/*.override.yml
+
+# --- celery beat state --------------------------------------------------------
+celerybeat-schedule*

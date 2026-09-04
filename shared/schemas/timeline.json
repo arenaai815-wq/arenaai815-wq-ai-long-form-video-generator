@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TimelineDocument",
+  "description": "Canonical timeline document. Stored as JSONB in `timelines.data`, edited by the browser editor, and consumed by the render worker (workers/rendering/compositor.py). All times are seconds on the master clock.",
+  "type": "object",
+  "required": ["version", "fps", "width", "height", "duration", "tracks"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "fps": { "type": "number", "default": 30 },
+    "width": { "type": "integer" },
+    "height": { "type": "integer" },
+    "duration": { "type": "number", "description": "Total duration in seconds" },
+    "background_color": { "type": "string", "default": "#000000" },
+    "tracks": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Track" }
+    },
+    "captions": { "$ref": "#/definitions/CaptionSettings" },
+    "watermark": { "$ref": "#/definitions/Watermark" }
+  },
+  "definitions": {
+    "Track": {
+      "type": "object",
+      "required": ["id", "kind", "clips"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "type": "string", "enum": ["video", "image", "voiceover", "music", "sfx", "text", "captions"] },
+        "name": { "type": "string" },
+        "muted": { "type": "boolean", "default": false },
+        "locked": { "type": "boolean", "default": false },
+        "volume": { "type": "number", "default": 1.0 },
+        "clips": { "type": "array", "items": { "$ref": "#/definitions/Clip" } }
+      }
+    },
+    "Clip": {
+      "type": "object",
+      "required": ["id", "start", "duration"],
+      "properties": {
+        "id": { "type": "string" },
+        "scene_id": { "type": ["string", "null"] },
+        "asset_id": { "type": ["string", "null"], "description": "MediaAsset or AudioAsset id" },
+        "start": { "type": "number", "description": "Position on the master timeline" },
+        "duration": { "type": "number" },
+        "trim_start": { "type": "number", "default": 0, "description": "Offset into source media" },
+        "trim_end": { "type": "number", "default": 0 },
+        "volume": { "type": "number", "default": 1.0 },
+        "fade_in": { "type": "number", "default": 0 },
+        "fade_out": { "type": "number", "default": 0 },
+        "transition_in": { "$ref": "#/definitions/Transition" },
+        "effect": { "$ref": "#/definitions/MotionEffect" },
+        "text": { "$ref": "#/definitions/TextOverlay" },
+        "label": { "type": "string" }
+      }
+    },
+    "Transition": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["none", "fade", "dissolve", "wipeleft", "wiperight", "slideleft", "slideright", "circleopen", "fadeblack", "fadewhite", "smoothleft", "smoothright"] },
+        "duration": { "type": "number", "default": 0.5 }
+      }
+    },
+    "MotionEffect": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["none", "ken_burns", "zoom_in", "zoom_out", "pan_left", "pan_right", "pan_up", "pan_down"] },
+        "intensity": { "type": "number", "default": 0.1, "minimum": 0, "maximum": 1 }
+      }
+    },
+    "TextOverlay": {
+      "type": "object",
+      "properties": {
+        "content": { "type": "string" },
+        "font_family": { "type": "string", "default": "DejaVu Sans" },
+        "font_size": { "type": "integer", "default": 56 },
+        "color": { "type": "string", "default": "#FFFFFF" },
+        "background": { "type": ["string", "null"] },
+        "position": { "type": "string", "enum": ["top", "center", "bottom", "top_left", "top_right", "bottom_left", "bottom_right"], "default": "center" },
+        "animation": { "type": "string", "enum": ["none", "fade", "slide_up", "typewriter"], "default": "fade" }
+      }
+    },
+    "CaptionSettings": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "burn_in": { "type": "boolean", "default": true },
+        "font_family": { "type": "string", "default": "DejaVu Sans" },
+        "font_size": { "type": "integer", "default": 44 },
+        "color": { "type": "string", "default": "#FFFFFF" },
+        "outline_color": { "type": "string", "default": "#000000" },
+        "outline_width": { "type": "number", "default": 2 },
+        "background_color": { "type": ["string", "null"] },
+        "position": { "type": "string", "enum": ["top", "center", "bottom"], "default": "bottom" },
+        "margin_v": { "type": "integer", "default": 60 },
+        "animation": { "type": "string", "enum": ["none", "fade", "pop", "karaoke"], "default": "none" },
+        "max_chars_per_line": { "type": "integer", "default": 42 },
+        "max_lines": { "type": "integer", "default": 2 },
+        "timing_offset": { "type": "number", "default": 0 }
+      }
+    },
+    "Watermark": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "asset_id": { "type": ["string", "null"] },
+        "text": { "type": ["string", "null"] },
+        "position": { "type": "string", "enum": ["top_left", "top_right", "bottom_left", "bottom_right"], "default": "bottom_right" },
+        "opacity": { "type": "number", "default": 0.6 }
+      }
+    }
+  }
+}

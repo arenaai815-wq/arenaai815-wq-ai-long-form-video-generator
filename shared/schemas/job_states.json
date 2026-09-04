@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "JobState",
+  "description": "Canonical lifecycle states shared by the API, workers and frontend. Keep in sync with backend/app/models/enums.py and frontend/src/types/enums.ts",
+  "type": "string",
+  "enum": [
+    "QUEUED",
+    "PROCESSING",
+    "RESEARCHING",
+    "GENERATING_SCRIPT",
+    "GENERATING_SCENES",
+    "GENERATING_AUDIO",
+    "GENERATING_VISUALS",
+    "GENERATING_CAPTIONS",
+    "RENDERING",
+    "UPLOADING",
+    "COMPLETED",
+    "FAILED",
+    "CANCELLED"
+  ],
+  "x-terminal": ["COMPLETED", "FAILED", "CANCELLED"],
+  "x-progress-weights": {
+    "description": "Approximate share of a full pipeline each stage consumes; used to compute overall percent and ETA.",
+    "RESEARCHING": 0.08,
+    "GENERATING_SCRIPT": 0.12,
+    "GENERATING_SCENES": 0.05,
+    "GENERATING_AUDIO": 0.2,
+    "GENERATING_VISUALS": 0.25,
+    "GENERATING_CAPTIONS": 0.05,
+    "RENDERING": 0.22,
+    "UPLOADING": 0.03
+  }
+}

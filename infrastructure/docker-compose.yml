@@ -1,0 +1,203 @@
+# LongForm AI — full stack for local development and single-host deployments.
+#
+#   cp .env.example .env                       # from the repo root
+#   docker compose -f infrastructure/docker-compose.yml up --build
+#
+#   Frontend  http://localhost:3000            (proxies /api/* to the API container)
+#   API docs  http://localhost:8000/api/v1/docs
+#   MinIO UI  http://localhost:9001            (minioadmin / minioadmin)
+#
+# Scale workers independently, e.g. more render capacity:
+#   docker compose -f infrastructure/docker-compose.yml up -d --scale worker-render=3
+
+name: longform
+
+x-backend-environment: &backend-environment
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-longform}:${POSTGRES_PASSWORD:-longform}@postgres:5432/${POSTGRES_DB:-longform}
+  REDIS_URL: redis://redis:6379/0
+  STORAGE_BACKEND: ${STORAGE_BACKEND:-s3}
+  S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
+  S3_BUCKET: ${S3_BUCKET:-longform-media}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-${MINIO_ROOT_USER:-minioadmin}}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-${MINIO_ROOT_PASSWORD:-minioadmin}}
+  S3_USE_PATH_STYLE: "true"
+  RENDER_WORK_DIR: /app/data/work
+  STORAGE_LOCAL_PATH: /app/data/storage
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+
+x-backend-build: &backend-build
+  context: ..
+  dockerfile: infrastructure/docker/backend.Dockerfile
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-longform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-longform}
+      POSTGRES_DB: ${POSTGRES_DB:-longform}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-longform} -d ${POSTGRES_DB:-longform}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # One-shot: create the media bucket (private; the API issues presigned URLs).
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin} &&
+      mc mb --ignore-existing local/${S3_BUCKET:-longform-media} &&
+      echo 'bucket ready'"
+
+  # One-shot: run Alembic migrations, then seed plans + admin user.
+  migrate:
+    build: *backend-build
+    env_file: ../.env
+    environment:
+      <<: *backend-environment
+    command: ["migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      <<: *backend-build
+      target: api
+    env_file: ../.env
+    restart: unless-stopped
+    environment:
+      <<: *backend-environment
+      SKIP_MIGRATIONS: "1"
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    volumes:
+      - render-work:/app/data/work
+
+  # Generation workers: LLM / TTS / image / video / captions (I/O bound, higher concurrency).
+  worker-generation:
+    build:
+      <<: *backend-build
+      target: worker
+    env_file: ../.env
+    restart: unless-stopped
+    command: ["worker"]
+    environment:
+      <<: *backend-environment
+      WORKER_QUEUES: generation,maintenance
+      WORKER_CONCURRENCY: ${GENERATION_CONCURRENCY:-4}
+      WORKER_NAME: generation
+    depends_on:
+      api:
+        condition: service_started
+    volumes:
+      - render-work:/app/data/work
+
+  # Render workers: FFmpeg composition (CPU bound, one render per process). Scale horizontally.
+  worker-render:
+    build:
+      <<: *backend-build
+      target: worker
+    env_file: ../.env
+    restart: unless-stopped
+    command: ["worker"]
+    environment:
+      <<: *backend-environment
+      WORKER_QUEUES: render
+      WORKER_CONCURRENCY: ${RENDER_CONCURRENCY:-1}
+      WORKER_NAME: render
+      WORKER_MAX_TASKS_PER_CHILD: "5"
+    depends_on:
+      api:
+        condition: service_started
+    volumes:
+      - render-work:/app/data/work
+    deploy:
+      resources:
+        limits:
+          cpus: "${RENDER_CPUS:-4}"
+          memory: ${RENDER_MEMORY:-4g}
+
+  # Beat: periodic heartbeats, stale-job reaping, temp cleanup. Exactly one instance.
+  beat:
+    build:
+      <<: *backend-build
+      target: worker
+    env_file: ../.env
+    restart: unless-stopped
+    command: ["beat"]
+    environment:
+      <<: *backend-environment
+    depends_on:
+      api:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/frontend.Dockerfile
+    restart: unless-stopped
+    environment:
+      API_INTERNAL_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  render-work:

@@ -75,7 +75,10 @@ def run_job(task: Task, job_id: str, body: Callable[[JobContext], dict[str, Any]
             db.rollback()
             job = load_job_sync(db, job_id, render=render)
             ctx.job = job
-            ctx.fail(f"{exc.__class__.__name__}: {exc}", details={"traceback": traceback.format_exc()[-3000:]})
+            # These are deliberate, human-readable failures (bad input, missing media, provider
+            # refusal, no credits): surface the message itself; the class name goes to details.
+            msg = str(exc).strip() or exc.__class__.__name__
+            ctx.fail(msg, details={"type": exc.__class__.__name__, "traceback": traceback.format_exc()[-3000:]})
             return {"job_id": job_id, "state": JobState.FAILED.value}
         except Exception as exc:  # retryable / unknown
             db.rollback()

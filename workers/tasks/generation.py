@@ -13,6 +13,7 @@ from app.models.enums import JobState, JobType, ProjectStatus, VisualType
 from app.models.project import Project
 from app.models.script import ScriptSection
 from app.models.user import User
+from app.providers.registry import get_registry
 from app.services import (
     caption_service,
     research_service,
@@ -52,9 +53,20 @@ def _stage_cb(ctx: JobContext, state: JobState, *, stages: list[JobState] | None
 # --------------------------------------------------------------------------- individual stages
 
 
+def _log_provider(ctx: JobContext, kind: str, name: str | None = None) -> None:
+    """Record which adapter (and model) a stage is about to use - invaluable when reading logs later."""
+    try:
+        p = get_registry().get(kind, name)
+        model = getattr(p, "model", None)
+        ctx.log(f"{kind} provider: {p.name}" + (f" ({model})" if model else "") + (" [mock]" if p.is_mock else ""), provider=p.name)
+    except Exception as exc:  # never let diagnostics break a job
+        ctx.log(f"{kind} provider lookup failed: {exc}", level="warning")
+
+
 def do_research(ctx: JobContext, project: Project, user: User, params: dict[str, Any], stages=None) -> dict[str, Any]:
     cb = _stage_cb(ctx, JobState.RESEARCHING, stages=stages)
     cb(0.02, "Researching topic... starting")
+    _log_provider(ctx, "llm", params.get("provider"))
     project.status = ProjectStatus.RESEARCHING
     research = research_service.generate_research_sync(
         ctx.db, project, user,
@@ -67,12 +79,14 @@ def do_research(ctx: JobContext, project: Project, user: User, params: dict[str,
     project.status = ProjectStatus.SCRIPTING
     ctx.db.commit()
     cb(1.0, "Research complete")
+    ctx.log(f"research: {len(research.sections)} sections")
     return {"research_id": str(research.id), "sections": len(research.sections)}
 
 
 def do_script(ctx: JobContext, project: Project, user: User, params: dict[str, Any], stages=None) -> dict[str, Any]:
     cb = _stage_cb(ctx, JobState.GENERATING_SCRIPT, stages=stages)
     cb(0.02, "Generating script... starting")
+    _log_provider(ctx, "llm", params.get("provider"))
     project.status = ProjectStatus.SCRIPTING
     script = script_service.generate_script_sync(
         ctx.db, project, user,
@@ -85,12 +99,14 @@ def do_script(ctx: JobContext, project: Project, user: User, params: dict[str, A
     project.status = ProjectStatus.STORYBOARDING
     ctx.db.commit()
     cb(1.0, f"Script complete: {script.word_count} words")
+    ctx.log(f"script: {script.word_count} words, ~{round((script.estimated_duration_seconds or 0) / 60, 1)} min, {len(script.sections)} sections")
     return {"script_id": str(script.id), "word_count": script.word_count, "estimated_duration_seconds": script.estimated_duration_seconds}
 
 
 def do_scenes(ctx: JobContext, project: Project, user: User, params: dict[str, Any], stages=None) -> dict[str, Any]:
     cb = _stage_cb(ctx, JobState.GENERATING_SCENES, stages=stages)
     cb(0.02, "Building storyboard... starting")
+    _log_provider(ctx, "llm", params.get("provider"))
     script = script_service.current_script(ctx.db, project.id)
     if script is None:
         raise ValueError("Generate a script before building scenes")
@@ -99,6 +115,7 @@ def do_scenes(ctx: JobContext, project: Project, user: User, params: dict[str, A
     project.status = ProjectStatus.STORYBOARDING
     ctx.db.commit()
     cb(1.0, f"Storyboard complete: {len(scenes)} scenes")
+    ctx.log(f"storyboard: {len(scenes)} scenes, {round(sum(sc.duration_seconds or 0 for sc in scenes), 1)}s planned")
     return {"scene_count": len(scenes)}
 
 
@@ -113,6 +130,8 @@ def do_voiceover(ctx: JobContext, project: Project, user: User, params: dict[str
     if not scenes:
         raise ValueError("No scenes to voice - build the storyboard first")
     project.status = ProjectStatus.GENERATING
+    _log_provider(ctx, "tts", params.get("provider"))
+    ctx.log(f"voiceover: {len(scenes)} scene(s), voice={params.get('voice_id') or 'project default'}, force={bool(params.get('force'))}")
     vos = voiceover_service.generate_voiceovers_sync(
         ctx.db, project, user, scenes,
         force=bool(params.get("force")), voice_id=params.get("voice_id"), provider=params.get("provider"),
@@ -123,6 +142,7 @@ def do_voiceover(ctx: JobContext, project: Project, user: User, params: dict[str
     timeline_service.sync_from_scenes(ctx.db, project, all_scenes)
     ctx.db.commit()
     cb(1.0, f"Voiceover complete: {len(vos)} clips")
+    ctx.log(f"voiceover: {len(vos)} clip(s), {round(sum(v.duration_seconds or 0 for v in vos), 1)}s of audio")
     return {"voiceover_count": len(vos), "total_audio_seconds": round(sum(v.duration_seconds or 0 for v in vos), 1)}
 
 
@@ -138,17 +158,23 @@ def do_visuals(ctx: JobContext, project: Project, user: User, params: dict[str, 
         raise ValueError("No scenes to visualise - build the storyboard first")
     project.status = ProjectStatus.GENERATING
     vt = VisualType(params["visual_type"]) if params.get("visual_type") else None
+    _log_provider(ctx, "image", params.get("provider") if (vt or VisualType.AI_IMAGE) == VisualType.AI_IMAGE else None)
+    if vt == VisualType.AI_VIDEO or any(getattr(sc, "visual_type", None) == VisualType.AI_VIDEO for sc in scenes):
+        _log_provider(ctx, "video")
+    ctx.log(f"visuals: {len(scenes)} scene(s), type={vt.value if vt else 'per-scene'}, force={bool(params.get('force'))}")
     assets = visual_service.generate_visuals_sync(ctx.db, project, user, scenes, force=bool(params.get("force")), visual_type=vt, provider=params.get("provider"), job_id=ctx.job.id, progress=cb)
     all_scenes = scene_service.scenes_for_project(ctx.db, project.id)
     timeline_service.sync_from_scenes(ctx.db, project, all_scenes)
     ctx.db.commit()
     cb(1.0, f"Visuals complete: {len(assets)} assets")
+    ctx.log(f"visuals: {len(assets)} asset(s) generated")
     return {"asset_count": len(assets)}
 
 
 def do_captions(ctx: JobContext, project: Project, user: User, params: dict[str, Any], stages=None) -> dict[str, Any]:
     cb = _stage_cb(ctx, JobState.GENERATING_CAPTIONS, stages=stages)
     cb(0.02, "Generating captions... starting")
+    _log_provider(ctx, "stt")
     scenes = scene_service.scenes_for_project(ctx.db, project.id)
     if not scenes:
         raise ValueError("No scenes - build the storyboard first")

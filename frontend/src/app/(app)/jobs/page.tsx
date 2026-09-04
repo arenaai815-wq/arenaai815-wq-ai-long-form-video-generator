@@ -95,7 +95,7 @@ export default function JobsPage() {
         {logs.data ? (
           <div className="space-y-2">
             {logs.data.error && <Alert tone="error" title="Error">{logs.data.error}</Alert>}
-            <pre className="max-h-[50vh] overflow-auto rounded-lg bg-black/40 p-3 font-mono text-[11px] leading-relaxed">{logs.data.logs.length ? logs.data.logs.map((l, i) => <div key={i} className={cn(l.level === "error" && "text-red-300", l.level === "warning" && "text-amber-300")}>{formatDate(l.ts)} [{l.level}] {l.message}</div>) : "No log entries."}</pre>
+            <pre className="max-h-[50vh] overflow-auto rounded-lg bg-black/40 p-3 font-mono text-[11px] leading-relaxed">{logs.data.logs.length ? logs.data.logs.map((l, i) => <div key={i} className={cn(l.level === "error" && "text-red-300", l.level === "warning" && "text-amber-300")}><span className="text-muted">{formatDate(l.ts)}{typeof l.elapsed_s === "number" ? ` +${l.elapsed_s.toFixed(1)}s` : ""}</span> [{l.level}] {l.message}</div>) : "No log entries."}</pre>
           </div>
         ) : <p className="text-sm text-muted">Loading…</p>}
       </Modal>

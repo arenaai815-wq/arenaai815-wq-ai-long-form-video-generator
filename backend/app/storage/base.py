@@ -29,6 +29,14 @@ def build_key(user_id: str | uuid.UUID, category: str, filename: str, project_id
     return "/".join(parts)
 
 
+class ObjectNotFound(FileNotFoundError):
+    """The object storage has no such key (deleted, never uploaded, or bucket inconsistency)."""
+
+    def __init__(self, key: str):
+        super().__init__(f"object not found in storage: {key}")
+        self.key = key
+
+
 class StorageBackend(abc.ABC):
     name: str = "base"
 

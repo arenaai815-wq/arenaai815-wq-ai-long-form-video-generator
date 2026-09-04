@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from app.core.config import settings
-from app.storage.base import StorageBackend, StoredObject
+from app.storage.base import ObjectNotFound, StorageBackend, StoredObject
 
 
 def _sign(payload: str) -> str:
@@ -75,9 +75,12 @@ class LocalStorage(StorageBackend):
         return mimetypes.guess_type(p.name)[0] or "application/octet-stream"
 
     def download_to(self, key: str, path: str | Path) -> Path:
+        src = self._path(key)
+        if not src.exists():
+            raise ObjectNotFound(key)
         dst = Path(path)
         dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(self._path(key), dst)
+        shutil.copyfile(src, dst)
         return dst
 
     def local_path(self, key: str) -> Path:

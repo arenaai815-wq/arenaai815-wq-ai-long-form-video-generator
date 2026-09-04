@@ -219,7 +219,7 @@ async def run_pipeline(request: Request, body: PipelineRequest, project: OwnedPr
     await assert_can_afford(db, user, sum(breakdown.values()))
     job, created = await create_generation_job(
         db, project_id=project.id, user_id=user.id, job_type=JobType.FULL_PIPELINE,
-        params={"stages": body.stages, "skip_existing": body.skip_existing, "render_preview": body.render_preview},
+        params={"stages": body.stages, "skip_existing": body.skip_existing, "render_preview": body.render_preview, **body.options},
         idempotency_key=body.idempotency_key, timeout_seconds=settings.render_job_timeout_seconds, credits_reserved=sum(breakdown.values()),
     )
     if created:

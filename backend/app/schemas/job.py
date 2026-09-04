@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.enums import JobState, JobType
 from app.schemas.common import ORMModel
@@ -61,7 +61,34 @@ class PipelineRequest(BaseModel):
     )
     skip_existing: bool = True
     render_preview: bool = False
+    options: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description=(
+            "Optional per-stage options keyed by stage name, e.g. "
+            '{"research": {"section_count": 6, "depth": "deep"}, "voiceover": {"voice_id": "...", "speed": 1.05}, '
+            '"visuals": {"visual_type": "ai_image", "provider": "openai"}}. Same fields as the individual stage endpoints.'
+        ),
+    )
     idempotency_key: str | None = Field(default=None, max_length=128)
+
+    @field_validator("stages")
+    @classmethod
+    def _known_stages(cls, v: list[str]) -> list[str]:
+        known = ["research", "script", "scenes", "voiceover", "visuals", "captions", "render"]
+        bad = [s for s in v if s not in known]
+        if bad:
+            raise ValueError(f"unknown stage(s): {', '.join(bad)}; valid: {', '.join(known)}")
+        # keep pipeline order regardless of how the client listed them
+        return [s for s in known if s in v]
+
+    @field_validator("options")
+    @classmethod
+    def _known_option_keys(cls, v: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        known = {"research", "script", "scenes", "voiceover", "visuals", "captions"}
+        bad = sorted(set(v) - known)
+        if bad:
+            raise ValueError(f"options for unknown stage(s): {', '.join(bad)}")
+        return v
 
 
 class RenderRequest(BaseModel):

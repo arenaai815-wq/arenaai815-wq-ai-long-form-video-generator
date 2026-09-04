@@ -9,7 +9,7 @@ from botocore.client import Config
 from botocore.exceptions import ClientError
 
 from app.core.config import settings
-from app.storage.base import StorageBackend, StoredObject
+from app.storage.base import ObjectNotFound, StorageBackend, StoredObject
 
 
 class S3Storage(StorageBackend):
@@ -54,7 +54,13 @@ class S3Storage(StorageBackend):
     def download_to(self, key: str, path: str | Path) -> Path:
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
-        self._client.download_file(self.bucket, key, str(p))
+        try:
+            self._client.download_file(self.bucket, key, str(p))
+        except ClientError as exc:
+            code = str(exc.response.get("Error", {}).get("Code", ""))
+            if code in {"404", "NoSuchKey", "NotFound"}:
+                raise ObjectNotFound(key) from exc
+            raise
         return p
 
     def delete(self, key: str) -> None:

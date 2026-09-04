@@ -25,6 +25,15 @@ Each `data:` payload is a `ProgressEvent` (`shared/schemas/progress_event.json`)
 
 `QUEUED → PROCESSING → GENERATING_SCRIPT | GENERATING_AUDIO | GENERATING_VISUALS | RENDERING | UPLOADING → COMPLETED | FAILED | CANCELLED` (`shared/schemas/job_states.json`).
 
+**Cancellation** (`POST /jobs/{id}/cancel`) sets a Redis flag that workers poll between steps *and* inside long native
+steps (a running FFmpeg encode is terminated within ~1 s). Cancelled/failed jobs can be re-queued with
+`POST /jobs/{id}/retry`; render retries reuse already-finished per-scene clips, pipeline retries resume from the last
+completed stage. Credits for renders are charged on completion only, so a cancelled render costs nothing.
+
+**Job logs** (`GET /jobs/{id}/logs`) return `{job_id, logs: [{ts, elapsed_s, level, message, stage?, provider?}], error, error_details}`.
+Every job records pickup, stage transitions, 25 % milestones, the provider/model each stage used, per-stage summaries
+(word counts, clip counts, encode size/time) and the final completion / failure / cancellation entry (last 200 entries kept).
+
 ## Endpoints
 
 ### auth
@@ -234,5 +243,5 @@ Request/response models are defined with Pydantic in `backend/app/schemas/` and 
 * **PlanPublic** — `id`, `name`, `price_usd_month`, `monthly_credits`, `storage_gb`, `max_video_minutes`, `max_resolution`, `watermark`, `concurrent_renders`, `features`, `is_current`?
 * **SubscriptionPublic** — `id`, `plan`, `status`, `monthly_credits`, `storage_limit_bytes`, `max_video_minutes`, `max_resolution`, `watermark_required`, `concurrent_renders`, `current_period_start`, `current_period_end`, `cancel_at_period_end`, `payment_provider`
 * **CheckoutResponse** — `checkout_url`, `mode`, `message`
-* **PipelineRequest** — `stages`?, `skip_existing`?, `render_preview`?, `idempotency_key`?
+* **PipelineRequest** — `stages`? (any of `research, script, scenes, voiceover, visuals, captions, render`; always run in pipeline order), `skip_existing`?, `render_preview`?, `options`? (per-stage options keyed by stage, e.g. `{"research": {"section_count": 6}, "voiceover": {"voice_id": "...", "speed": 1.05}, "visuals": {"visual_type": "ai_image", "provider": "openai"}}` — same fields as the individual stage endpoints), `idempotency_key`?
 * **WorkerStatus** — `worker_id`, `hostname`, `queues`, `concurrency`, `active_tasks`, `processed_total`, `failed_total`, `last_heartbeat_at`, `healthy`, `version`

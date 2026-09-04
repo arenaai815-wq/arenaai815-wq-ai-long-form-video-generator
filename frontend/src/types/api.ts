@@ -233,6 +233,10 @@ export interface JobLogEntry {
   ts: string;
   level: "info" | "warning" | "error" | string;
   message: string;
+  /** Seconds since the job was first picked up by a worker. */
+  elapsed_s?: number;
+  stage?: string;
+  provider?: string;
 }
 
 export interface Job {

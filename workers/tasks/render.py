@@ -19,7 +19,7 @@ from app.services import caption_service
 from app.services.billing_service import record_usage_sync
 from app.services.job_service import JobContext
 from app.services.media_service import default_local_path, save_media_asset_sync
-from app.storage import get_storage
+from app.storage import ObjectNotFound, get_storage
 from workers.celery_app import celery_app
 from workers.rendering.compositor import AssetLocator, Compositor, RenderOptions, generate_thumbnail
 from workers.tasks.base import run_job
@@ -58,10 +58,41 @@ def _locator(db, work: Path) -> AssetLocator:
             return local
         target = dl / f"{asset_id}.{ext}"
         if not target.exists():
-            storage.download_to(key, target)
+            storage.download_to(key, target)  # raises ObjectNotFound -> MissingAssetError (see _preflight_assets)
         return target
 
     return AssetLocator(resolve=resolve)
+
+
+class MissingAssetError(ValueError):
+    """A timeline clip references media that no longer exists in object storage (non-retryable)."""
+
+
+def _preflight_assets(ctx: JobContext, doc: dict[str, Any], locator: AssetLocator) -> None:
+    """Resolve every referenced asset up front so a broken reference fails fast with a message
+    that names the scene/clip, instead of surfacing as a FileNotFoundError from deep inside FFmpeg."""
+    missing: list[str] = []
+    seen: set[str] = set()
+    total = 0
+    for track in doc.get("tracks", []):
+        for clip in track.get("clips") or []:
+            aid = clip.get("asset_id")
+            if not aid or aid in seen:
+                continue
+            seen.add(aid)
+            total += 1
+            label = clip.get("label") or clip.get("scene_id") or clip.get("id") or "?"
+            try:
+                path = locator.path(aid, clip.get("asset_kind"))
+            except ObjectNotFound as exc:
+                missing.append(f"{track.get('kind', 'track')} clip '{label}' (asset {aid}: {exc.key})")
+                continue
+            if path is None:
+                missing.append(f"{track.get('kind', 'track')} clip '{label}' (asset {aid} not in database)")
+    ctx.log(f"assets: {total} referenced, {total - len(missing)} available" + (f", {len(missing)} MISSING" if missing else ""), level="warning" if missing else "info")
+    if missing:
+        shown = "; ".join(missing[:5]) + (f"; +{len(missing) - 5} more" if len(missing) > 5 else "")
+        raise MissingAssetError(f"{len(missing)} media asset(s) referenced by the timeline are missing from storage - regenerate or replace them and render again: {shown}")
 
 
 @celery_app.task(bind=True, name="workers.tasks.render.run_render_job", max_retries=1, soft_time_limit=settings.render_job_timeout_seconds, time_limit=settings.render_job_timeout_seconds + 120)
@@ -125,9 +156,20 @@ def run_render_job(self, job_id: str) -> dict[str, Any]:
                 last_parent_tick[0] = frac
                 parent_ctx.progress(parent_base + (99 - parent_base) * frac, f"Rendering video... {int(frac * 100)}%")
 
-        comp = Compositor(doc, locator=_locator(ctx.db, work), options=options, captions=cues, caption_style=cap_style, work_dir=work, progress=progress, check_cancelled=ctx.check_cancelled, should_stop=ctx.cancel_predicate())
+        n_clips = sum(len(t.get("clips") or []) for t in doc.get("tracks", []) if t.get("kind") == "video")
+        cached = len(list(work.glob("clip_*.mp4")))
+        ctx.log(
+            f"render {options.width}x{options.height}@{job.fps}fps preset={options.preset} crf={options.crf} "
+            f"clips={n_clips} captions={'burn' if options.burn_captions else 'off'} cues={len(cues)} "
+            f"range={options.range_start}-{options.range_end}" + (f" (reusing {cached} cached clips)" if cached else ""),
+            attempt=job.attempt,
+        )
+        locator = _locator(ctx.db, work)
+        _preflight_assets(ctx, doc, locator)
+        comp = Compositor(doc, locator=locator, options=options, captions=cues, caption_style=cap_style, work_dir=work, progress=progress, check_cancelled=ctx.check_cancelled, should_stop=ctx.cancel_predicate())
         output = work / ("preview.mp4" if job.is_preview else "final.mp4")
         result = comp.render(output)
+        ctx.log(f"encoded {result['width']}x{result['height']} {result['duration']:.2f}s in {time.time() - started:.1f}s -> {output.stat().st_size / 1e6:.1f} MB")
 
         ctx.set_state(JobState.UPLOADING, "Uploading video...", progress=93)
         data = output.read_bytes()
@@ -151,6 +193,7 @@ def run_render_job(self, job_id: str) -> dict[str, Any]:
         job.output_duration_seconds = result["duration"]
         job.output_size_bytes = len(data)
         job.render_seconds = round(time.time() - started, 1)
+        ctx.log(f"stored as media asset {asset.id} ({filename})")
         if not job.is_preview:
             project.final_video_asset_id = asset.id
             project.status = ProjectStatus.COMPLETED

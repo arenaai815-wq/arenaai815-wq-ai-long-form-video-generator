@@ -22,6 +22,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.config import settings
 from app.core.exceptions import ConflictError, NotFoundError
@@ -321,6 +322,7 @@ class JobContext:
         j.started_at = j.started_at or _now()
         j.heartbeat_at = _now()
         j.progress = max(j.progress, 1)
+        self.log(f"attempt {j.attempt} started on worker {self.worker_id}")
         self._commit_and_publish()
 
     def set_state(self, state: JobState, message: str | None = None, *, progress: int | None = None) -> None:
@@ -331,6 +333,7 @@ class JobContext:
         if progress is not None:
             self.job.progress = max(self.job.progress, int(progress))
         self._stage_started = _now()
+        self.log(f"{self.job.stage}: {self.job.message}", stage=state.value)
         self._commit_and_publish(force=True)
 
     def progress(self, percent: float, message: str | None = None, *, stage_fraction: float | None = None) -> None:
@@ -360,13 +363,28 @@ class JobContext:
             self.job.state = state
             self.job.stage = stage_label
             self._stage_started = _now()
+            self._milestone = -1
+            self.log(f"{stage_label} started", stage=state.value)
+        milestone = int(fraction * 4)  # 0,25,50,75,100 % of the stage
+        if milestone > getattr(self, "_milestone", -1) and 0 < milestone:
+            self._milestone = milestone
+            self.log(f"{stage_label} {milestone * 25}%: {msg}", stage=state.value)
         self.progress(pct, msg, stage_fraction=fraction)
 
     def log(self, message: str, level: str = "info", **extra: Any) -> None:
-        entry = {"ts": _now().isoformat(), "level": level, "message": message, **{k: str(v) for k, v in extra.items()}}
+        """Append a structured entry to the job's persisted log (kept to the last 200 entries).
+
+        Lifecycle methods call this automatically, so every job carries a readable timeline
+        (pickup, stage transitions, milestones, completion / failure / cancellation); tasks add
+        domain detail (provider used, skipped stages, warnings) on top.
+        """
+        origin = self.job.started_at or self._started  # persisted, so entries written by another worker process line up
+        elapsed = round((_now() - origin).total_seconds(), 1)
+        entry = {"ts": _now().isoformat(), "level": level, "message": message, "elapsed_s": elapsed, **{k: str(v) for k, v in extra.items()}}
         logs = list(self.job.logs or [])
         logs.append(entry)
         self.job.logs = logs[-200:]
+        flag_modified(self.job, "logs")
         getattr(log, level, log.info)(message, job_id=str(self.job.id), **extra)
 
     def check_cancelled(self) -> None:
@@ -392,6 +410,7 @@ class JobContext:
         j.eta_seconds = 0
         if result:
             j.result = {**(j.result or {}), **_serialize_result(result)}
+        self.log(f"completed: {message}")
         self._commit_and_publish(force=True)
 
     def fail(self, error: str, *, details: dict[str, Any] | None = None, retrying: bool = False) -> None:
@@ -407,7 +426,7 @@ class JobContext:
             j.stage = STAGE_LABELS[JobState.FAILED]
             j.message = error[:500]
             j.finished_at = _now()
-        self.log(error, level="error")
+        self.log((f"attempt {j.attempt} failed, will retry: " if retrying else "failed: ") + error[:1000], level="error")
         self._commit_and_publish(force=True)
 
     def cancelled(self) -> None:
@@ -416,6 +435,7 @@ class JobContext:
         j.stage = STAGE_LABELS[JobState.CANCELLED]
         j.message = "Cancelled by user"
         j.finished_at = _now()
+        self.log("cancelled by user", level="warning")
         self._commit_and_publish(force=True)
 
     # -- internals -------------------------------------------------------------

@@ -224,7 +224,7 @@ export const api = {
     restore: (id: string) => post<ProjectDetail>(`/projects/${id}/restore`),
     duplicate: (id: string) => post<ProjectDetail>(`/projects/${id}/duplicate`),
     estimate: (id: string) => get<CostEstimate>(`/projects/${id}/estimate`),
-    generate: (id: string, body?: { stages?: string[]; skip_existing?: boolean; render_preview?: boolean; idempotency_key?: string }) =>
+    generate: (id: string, body?: { stages?: string[]; skip_existing?: boolean; render_preview?: boolean; options?: Record<string, Record<string, unknown>>; idempotency_key?: string }) =>
       post<Job>(`/projects/${id}/generate`, body ?? {}),
     jobs: (id: string) => get<Job[]>(`/projects/${id}/jobs`),
     export: (id: string) => get<ExportInfo>(`/projects/${id}/export`),

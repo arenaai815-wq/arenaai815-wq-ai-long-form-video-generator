@@ -1,69 +1,41 @@
-# THE NIGHT BEFORE — HOOK · Brand system + 7-asset blueprint
+# THE NIGHT BEFORE — HOOK · Brand system + 7-asset record (OBLIK, 2026)
 
-Product: creator guide to writing hooks that stop the scroll (PDF + worksheets, content final).
-World: warm premium editorial. Status: brand LOCKED, copy slots awaiting PDF text.
+Product (from the author's final PDF): a morning-training adherence system.
+A 10-minute night-before ritual — HOOK: Hang the clothes · Open the timer app ·
+Order the if-then · Kodak: photo the hook. "Morning does not decide. Night
+already did." Buyer: people who mean it at night and negotiate in the morning.
+NOT a workout program, NOT motivation, NOT medical advice. No invented
+testimonials, stats, or claims anywhere in these assets — every line is from
+the PDF (implementation-intentions science attributed to Gollwitzer & Sheeran).
 
-## 1. Locked identity (used identically in all 7 assets)
+## Locked identity (identical across all 7)
 
-- Palette: warm paper `#FAF8F4`, ink `#1C1917`, muted `#57534E`, deep navy `#1E3A8A`
-  for headers/dividers, ONE accent blue `#1D4ED8`, soft tint `#DBEAFE`.
-- Type: serif display (Fraunces / Playfair style) for title + headlines,
-  clean sans (Inter style) for support lines, mono for labels/numbers.
-- Motif: the "night-before" desk — warm lamp glow, notebook, phone showing a hook
-  draft. One mockup style throughout: soft daylight-lamp 3D book + phone.
-- Voice on assets: specific and useful, never hype. No fake stats, reviews,
-  earnings, or testimonials. No gradients, glow, or stock-photo collage.
-- Product name always rendered: THE NIGHT BEFORE — HOOK.
+- Palette: paper `#FAF8F4`, ink `#1C1917`, navy `#1E3A8A`, deep navy `#0D1833`,
+  accent `#1D4ED8`, amber `#C97D1F` / light `#E8A33D`.
+- Type: Fraunces (display serif) + Inter (text). `src/fonts/` holds the VFs.
+- Motif: the night-before desk — wooden hook, hung kit, phone timer, notebook,
+  warm lamp glow in navy shadow. `src/bg-*.png` (AI-generated, text-free).
+- Footer lockup on TikToks: `THE NIGHT BEFORE — HOOK / OBLIK · on Gumroad`.
 
-## 2. Asset blueprints (layouts locked, copy slots marked)
+## Files
 
-### A1 · Product cover (portrait, high-res)
-Composition: 3D book hero slightly left, phone with hook draft overlapping right,
-title top in serif, one-line value prop under it, audience line, contents strip
-along the bottom (real counts from PDF).
-Copy slots: [VALUE-PROP 1 line] [AUDIENCE 1 line] [CONTENTS counts: pages·
-worksheets·checklists·frameworks] — all FROM PDF, nothing invented.
+- `A1-cover.png` (1600×2560) — hero cover: title, tagline, photo, value prop,
+  contents strip, honesty footer.
+- `A2-gumroad-thumbnail.png` (1280×720) — grid-built, NOT a resize: giant title
+  legible at 300px, one outcome line, photo slice right.
+- `A3-tiktok-1-pain.png` (1080×1920) — "At night you mean it. In the morning
+  you negotiate." + 3 pain lines, open loop, no solution.
+- `A3-tiktok-2-reveal.png` — the HOOK 4 moves + ALSO INSIDE inventory box.
+- `A3-tiktok-3-transformation.png` — BEFORE morning-meeting card vs AFTER
+  one-decision card. Realistic, no hype.
+- `A3-tiktok-4-difference.png` — "Okay. How, exactly?" + 5 not-Googleable
+  items incl. cited 94-test meta-analysis.
+- `A3-tiktok-5-showcase.png` — product hero + 3 points + Gumroad CTA button.
+- `build_assets.py` — deterministic rebuild (Pillow + Fraunces/Inter VFs).
+  Re-run after any copy change; visually QA before shipping.
 
-### A2 · Gumroad thumbnail (landscape 1280×720, grid-built, NOT a resize)
-Composition: paper background, giant serif title (legible at 300px), one survives-
-shrinking concept: book + single hook line on phone, 3-word outcome strip.
-Everything unreadable at small size is deleted.
-Copy slots: [TITLE short form] [3-WORD OUTCOME] — FROM PDF.
+## QA rules that were enforced (keep enforcing)
 
-### A3 · TikTok post 1 — Pain (1080×1920)
-One specific painful scene, verbatim-buyer language: hooks ignored, 200-view
-jail, blank-page dread. Ends on an open loop, no solution given.
-Copy slots: [PAIN LINES ×3, buyer's own words] — FROM PDF or buyer line.
-
-### A4 · TikTok post 2 — Reveal (1080×1920)
-Flat-lay of real inside pages: chapter spread + worksheet + checklist + framework
-card. Labels name the actual contents.
-Copy slots: [CHAPTER TITLES ×3] [FRAMEWORK NAMES] [WORKSHEET NAMES] — FROM PDF.
-
-### A5 · TikTok post 3 — Transformation (1080×1920)
-Before → after split, one realistic specific outcome (time saved, hooks banked,
-posting cadence). No exaggerated promises.
-Copy slots: [BEFORE state] [AFTER state + mechanism] — FROM PDF outcome.
-
-### A6 · TikTok post 4 — Differentiation (1080×1920)
-"Not Googleable" board: proprietary framework names + system + organization +
-time saved. Viewer thinks: I can't get this from a random search.
-Copy slots: [FRAMEWORK NAMES + 1-line each] [SYSTEM NAME] — FROM PDF.
-
-### A7 · TikTok post 5 — Showcase (1080×1920)
-Product as hero: cover + best spread + strongest proof-of-usefulness + single CTA
-to Gumroad. Desire, not information.
-Copy slots: [TOP 3 SELLING POINTS] [CTA line] — FROM PDF.
-
-## 3. Content needed to fill the slots (paste as text)
-
-Chapters (titles in order) / Framework names + 1 line each / Worksheet +
-checklist + template inventory with counts / Total pages / 3 best example hooks
-from inside / Buyer one-liner / Realistic outcome one-liner / Why-not-Googleable
-one-liner. Full PDF text preferred; extraction sheet accepted.
-
-## 4. Build order once content lands
-
-Audit (flag thin spots before designing) → generate A1 cover → reuse as visual
-reference for A2–A7 (locks consistency) → legibility QA at real sizes →
-present all 7 + file list.
+- Title/copy never clipped: auto-fit checks on cover strip + thumbnail lines.
+- No tofu glyphs: ✕/✓/→/↓ verified in Inter/Fraunces; X marks are drawn.
+- No box/footer collisions; no invented content — PDF is the only copy source.

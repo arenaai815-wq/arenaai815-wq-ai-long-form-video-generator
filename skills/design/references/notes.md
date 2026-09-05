@@ -1,15 +1,18 @@
-# Taste references
+# Taste references — premium Gumroad products only
 
-Drop 3–5 screenshots you love into this folder (e.g. `ref-01.png`), then add a one-line "why" below.
+Drop 3–5 screenshots into this folder. Websites and SaaS dashboards do NOT count.
+Wanted: bestselling-style Gumroad covers, beautiful PDF spreads, high-end Notion dashboards, toolkit "what's inside" maps.
 
-Format:
-- `ref-01.png` — why: calm background, tight spacing, one accent color
-- `ref-02.png` — why: great dashboard density without clutter
-- `ref-03.png` — why: hero copy pattern to copy (eyebrow → H1 → 2 CTAs)
+Good sources: top Gumroad discover pages for Notion templates, ebook guides, and creator toolkits — plus books/magazines with editorial layouts you want the guide to feel like.
+
+Format — one line per ref, one thing to steal:
+- `ref-01.png` — why: cover with 5-word title readable at thumbnail size
+- `ref-02.png` — why: chapter spread with divider + takeaways box to copy
+- `ref-03.png` — why: worksheet with filled example + blank space pattern
+- `ref-04.png` — why: Notion dashboard with 4-button nav + progress bar
+- `ref-05.png` — why: "what's inside" bundle map for the listing images
 
 Rules:
-- Prefer real products (Linear, Stripe, Vercel, Arc, Raycast, Netflix) over Dribbble mockups.
-- For each ref, note ONE thing to steal, not "looks nice".
-- The agent will match these over inventing new styles.
-
-Currently empty — add your first 3 favorites whenever ready. Even phone screenshots work.
+- One steal per ref ("tight 60ch measure", "one blue + warm paper", "checklist grouping in 7s").
+- If a ref contradicts the SKILL (gradients, clutter, filler), say what to AVOID from it.
+- Empty for now — add your favorites whenever ready. Phone screenshots of Gumroad finds work fine.

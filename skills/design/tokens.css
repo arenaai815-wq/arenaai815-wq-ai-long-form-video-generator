@@ -1,40 +1,53 @@
-/* Design tokens — single source of truth for the design skill.
-   Import in any page/component. Keep all UI on these values. */
+/* Editorial + product tokens — single source of truth for Gumroad digital products.
+   Screen values (:root) feed mockups/previews/listing images.
+   Print values (.page) are the targets when exporting the PDF guide. */
 
 :root {
-  /* Surfaces (light = default) */
-  --bg: #fafaf9;          /* warm paper */
+  /* Paper + ink */
+  --bg: #faf8f4;            /* warm paper */
   --surface: #ffffff;
-  --surface-2: #f4f4f2;
-  --line: #e7e5e0;        /* borders */
+  --surface-2: #f3efe7;
+  --line: #e5ded2;
 
-  /* Ink */
   --ink: #1c1917;
   --ink-2: #57534e;
   --ink-3: #a8a29e;
 
-  /* Accent — the ONE action color. Change this to re-theme the product. */
-  --accent: #2563eb;
-  --accent-ink: #ffffff;
+  /* Brand — ONE accent + its deep shade. Re-theme here. */
+  --accent: #1d4ed8;
+  --accent-deep: #1e3a8a;
   --accent-soft: #dbeafe;
+  --accent-ink: #ffffff;
 
-  /* Status (functional only) */
+  /* Status (trackers/checklists only) */
   --success: #16a34a;
-  --warning: #d97706;
-  --danger: #dc2626;
+  --warning: #b45309;
+  --danger: #b91c1c;
 
   /* Type */
-  --font-sans: ui-sans-system, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
-  --font-display: ui-sans-system, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+  --font-display: "Fraunces", "Playfair Display", Georgia, serif;
+  --font-body: "Inter", "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
-  /* Spacing base 4px — use 4/8/12/16/24/32/48/64/96 */
+  /* Radius + shadow (previews, mockups, Notion covers) */
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 16px;
-  --r-pill: 999px;
+  --shadow-sm: 0 1px 2px rgb(28 25 23 / 0.08);
+  --shadow-md: 0 12px 32px rgb(28 25 23 / 0.12);
+}
 
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.06);
-  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.08);
+/* Print targets for the PDF guide export */
+.page {
+  --page-size: US-Letter;            /* or A4 */
+  --page-margin: 20mm;
+  --body-size: 10.5pt;
+  --body-leading: 16pt;
+  --h1-size: 32pt;
+  --h2-size: 17pt;
+  --h3-size: 12pt;
+  --caption-size: 8.5pt;
+  --measure: 60ch;                   /* 55–70ch body line length */
 }
 
 [data-theme="dark"] {
@@ -42,10 +55,11 @@
   --surface: #1c1917;
   --surface-2: #292524;
   --line: #292524;
-  --ink: #fafaf9;
+  --ink: #faf8f4;
   --ink-2: #d6d3d1;
   --ink-3: #78716c;
-  --accent: #60a5fa;
-  --accent-ink: #0c0a09;
+  --accent: #93c5fd;
+  --accent-deep: #eff6ff;
   --accent-soft: #1e3a8a;
+  --accent-ink: #0c0a09;
 }

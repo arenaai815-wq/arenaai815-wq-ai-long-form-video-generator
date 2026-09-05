@@ -1,0 +1,51 @@
+/* Design tokens — single source of truth for the design skill.
+   Import in any page/component. Keep all UI on these values. */
+
+:root {
+  /* Surfaces (light = default) */
+  --bg: #fafaf9;          /* warm paper */
+  --surface: #ffffff;
+  --surface-2: #f4f4f2;
+  --line: #e7e5e0;        /* borders */
+
+  /* Ink */
+  --ink: #1c1917;
+  --ink-2: #57534e;
+  --ink-3: #a8a29e;
+
+  /* Accent — the ONE action color. Change this to re-theme the product. */
+  --accent: #2563eb;
+  --accent-ink: #ffffff;
+  --accent-soft: #dbeafe;
+
+  /* Status (functional only) */
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+
+  /* Type */
+  --font-sans: ui-sans-system, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+  --font-display: ui-sans-system, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+
+  /* Spacing base 4px — use 4/8/12/16/24/32/48/64/96 */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.06);
+  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.08);
+}
+
+[data-theme="dark"] {
+  --bg: #0c0a09;
+  --surface: #1c1917;
+  --surface-2: #292524;
+  --line: #292524;
+  --ink: #fafaf9;
+  --ink-2: #d6d3d1;
+  --ink-3: #78716c;
+  --accent: #60a5fa;
+  --accent-ink: #0c0a09;
+  --accent-soft: #1e3a8a;
+}
